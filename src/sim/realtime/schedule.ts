@@ -49,13 +49,16 @@ export type ScheduleEntry =
  * (radar-shy) show up after boss #1 so the player feels their coverage gaps.
  */
 export const SCHEDULE: ScheduleEntry[] = [
-  { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 4 }], 70) },
-  { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 5 }, { typeId: "low-observable", count: 1 }], 90) },
+  { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 4 }], 60) },
+  { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 6 }], 75) },
   { type: "boss", bossIndex: 1 },
-  { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 4 }, { typeId: "autonomy", count: 2 }], 110) },
-  { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 5 }, { typeId: "autonomy", count: 2 }, { typeId: "low-observable", count: 2 }], 130) },
+  { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 5 }, { typeId: "low-observable", count: 2 }], 90) },
+  { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 2 }], 105) },
+  { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 2 }], 120) },
   { type: "boss", bossIndex: 2 },
-  { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 3 }], 160) },
+  { type: "wave", wave: makeWave(6, [{ typeId: "rf-quad", count: 8 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 3 }], 140) },
+  { type: "wave", wave: makeWave(7, [{ typeId: "rf-quad", count: 8 }, { typeId: "autonomy", count: 4 }, { typeId: "low-observable", count: 4 }], 160) },
+  { type: "wave", wave: makeWave(8, [{ typeId: "rf-quad", count: 10 }, { typeId: "autonomy", count: 5 }, { typeId: "low-observable", count: 4 }], 190) },
 ];
 
 /** Bearing (deg, 0 = north) of a placed device's hex around the centre. */

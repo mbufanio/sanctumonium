@@ -19,8 +19,12 @@ import type { EffectorTypeId, SensorTypeId, ThreatTypeId } from "../boss/types.t
 import { DRONE_SPECS, LEAK_RADIUS } from "./catalog.ts";
 import type { Drone, PlacedDevice, RealtimeState, WaveDef } from "./types.ts";
 
-/** Effectiveness multiplier when firing on an untracked drone. */
-const UNTRACKED_PENALTY = 0.4;
+/**
+ * Effectiveness multiplier when firing on an untracked drone. Deliberately
+ * harsh: firing without a sensor track is a coin-flip at best, so sensor
+ * coverage (coordination) is what actually wins — not spamming effectors.
+ */
+const UNTRACKED_PENALTY = 0.2;
 
 export interface StepEnv {
   /** Plane radius at which drones spawn (just beyond the field edge). */

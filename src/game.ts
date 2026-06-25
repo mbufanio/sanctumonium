@@ -19,7 +19,7 @@ import {
   type BossSession,
   type GameState,
 } from "./sim/state.ts";
-import { placeableById } from "./sim/realtime/catalog.ts";
+import { placeableById, TRACKED_KILL_BONUS } from "./sim/realtime/catalog.ts";
 import { createRealtimeState } from "./sim/realtime/types.ts";
 import { stepWave } from "./sim/realtime/engine.ts";
 import { SCHEDULE, bossConfigFromLayout } from "./sim/realtime/schedule.ts";
@@ -105,7 +105,7 @@ export class Game {
     for (const k of res.kills) {
       s.currency += k.bounty;
       // Scoring rewards coordination: a tracked kill is worth more (spec §8).
-      s.score += k.bounty * (k.tracked ? 1.5 : 1.0);
+      s.score += k.bounty * (k.tracked ? TRACKED_KILL_BONUS : 1.0);
     }
     for (const lk of res.leaks) {
       s.integrity -= lk.damage;

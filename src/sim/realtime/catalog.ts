@@ -21,6 +21,13 @@ import type {
 /** Plane-units per abstract "km" of device range (tunes coverage on the field). */
 export const RANGE_SCALE = 52;
 
+/**
+ * Score multiplier for a kill made while the drone was sensor-tracked (spec §8
+ * guardrail: coordinated, well-tracked defense must outscore brute force). An
+ * untracked kill scores ×1.
+ */
+export const TRACKED_KILL_BONUS = 2.0;
+
 /** Distance (plane units) from centre at which a drone is considered to have
  *  leaked into the protected asset. */
 export const LEAK_RADIUS = 30;
