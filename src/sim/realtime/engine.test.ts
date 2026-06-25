@@ -65,3 +65,58 @@ describe("real-time auto-defense", () => {
     expect(stops).toBeGreaterThan(34);
   });
 });
+
+describe("brain coordination (spec §12 face 1 — same hardware, better used)", () => {
+  // Four overlapping net-drones around the centre, all tracked by a central
+  // radar, against a dense wave. Without coordination they dogpile the most
+  // central drone and waste shots; with it they deconflict and spread fire.
+  const placed: PlacedDevice[] = [
+    device("sensor", "radar", 0, 0),
+    device("effector", "net-drone", 1, 0),
+    device("effector", "net-drone", -1, 0),
+    device("effector", "net-drone", 0, 1),
+    device("effector", "net-drone", 0, -1),
+  ];
+
+  function denseWave(): WaveDef {
+    // A saturating swarm so the chokepoint near the centre is overwhelmed —
+    // that's when wasted (dogpiled) shots turn into leaks.
+    const spawns = Array.from({ length: 48 }, (_, i) => ({
+      at: i * 0.08,
+      typeId: "rf-quad" as const,
+      bearing: (i * 47) % 360,
+    }));
+    return { index: 1, kind: "normal", label: "dense", spawns, stipend: 0 };
+  }
+
+  function run(coordinated: boolean, seed: number) {
+    const rt = createRealtimeState();
+    const rng = new Rng(seed);
+    let kills = 0;
+    let leaks = 0;
+    const wave = denseWave();
+    for (const d of placed) d.cooldown = 0;
+    for (let i = 0; i < 4000; i++) {
+      const res = stepWave(rt, placed, wave, 1 / 60, rng, { spawnRadius: ENV.spawnRadius, coordinated });
+      kills += res.kills.length;
+      leaks += res.leaks.length;
+      if (res.waveComplete) break;
+    }
+    return { kills, leaks };
+  }
+
+  it("coordinated fire kills more and leaks less than uncoordinated, same hardware", () => {
+    let coKills = 0;
+    let unKills = 0;
+    let coLeaks = 0;
+    let unLeaks = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const co = run(true, seed);
+      const un = run(false, seed);
+      coKills += co.kills; coLeaks += co.leaks;
+      unKills += un.kills; unLeaks += un.leaks;
+    }
+    expect(coKills).toBeGreaterThan(unKills);
+    expect(coLeaks).toBeLessThan(unLeaks);
+  });
+});

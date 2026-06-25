@@ -38,7 +38,9 @@ export interface Drone {
 export type Fx =
   | { kind: "shot"; from: Px; to: Px; effector: string; hit: boolean }
   | { kind: "kill"; at: Px }
-  | { kind: "leak"; at: Px; damage: number };
+  | { kind: "leak"; at: Px; damage: number }
+  // Brain coordination: a sensor handing a track to the effector engaging it.
+  | { kind: "handoff"; from: Px; to: Px };
 
 /** A queued spawn: emit a drone of `typeId` at sim time `at`, bearing `bearing`. */
 export interface SpawnEntry {

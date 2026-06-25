@@ -10,12 +10,15 @@
  * taps; only the actual controls capture pointer events.
  */
 import { PLACEABLES, type Placeable } from "../sim/realtime/catalog.ts";
+import type { Recommendation } from "../sim/realtime/adaptive.ts";
 import type { GameState } from "../sim/state.ts";
 
 export interface HudCallbacks {
   onSelectPlaceable(id: string): void;
   onStartWave(): void;
   onSell(deviceId: string): void;
+  onAcceptRec(): void;
+  onDismissRec(): void;
 }
 
 export class Hud {
@@ -49,6 +52,7 @@ export class Hud {
         <div class="integ-bar"><div class="integ-fill" data-ref="integfill"></div><span class="integ-num" data-ref="integnum"></span></div>
       </div>
       <div class="hud-stat"><span class="hud-k">SCORE</span><span class="hud-v" data-ref="score">0</span></div>
+      <div class="hud-coord" data-ref="coord">◈ COORDINATION ACTIVE</div>
     `;
     this.root.append(bar);
     this.bar = bar;
@@ -62,6 +66,8 @@ export class Hud {
     this.refs.stage.textContent = state.phase === "wave" && state.activeWave ? state.activeWave.label : `Step ${entry + 1}`;
     this.refs.funds.textContent = `$${Math.floor(state.currency)}`;
     this.refs.score.textContent = String(Math.floor(state.score));
+    const coordActive = state.brainUnlocked && !state.brainStaffDisabled;
+    this.refs.coord.classList.toggle("on", coordActive);
     const frac = Math.max(0, state.integrity / state.maxIntegrity);
     this.refs.integfill.style.width = `${frac * 100}%`;
     this.refs.integfill.className = "integ-fill " + (frac > 0.5 ? "ok" : frac > 0.25 ? "warn" : "crit");
@@ -74,10 +80,13 @@ export class Hud {
   }
 
   /** Show the between-waves build dock. */
-  showBuild(state: GameState, nextLabel: string): void {
+  showBuild(state: GameState, nextLabel: string, rec: Recommendation | null): void {
     this.ensureBar();
     this.dock?.remove();
     const dock = el("div", "build-dock");
+
+    // Brain recommendation (face 3) — suggest-and-accept, only after unlock.
+    if (rec) dock.append(this.recCard(rec, state));
 
     const hint = el("div", "build-hint");
     hint.textContent = state.selectedPlaceable
@@ -103,6 +112,27 @@ export class Hud {
   hideBuild(): void {
     this.dock?.remove();
     this.dock = null;
+  }
+
+  private recCard(rec: Recommendation, state: GameState): HTMLElement {
+    const p = PLACEABLES.find((x) => x.id === rec.placeableId);
+    const afford = !!p && state.currency >= p.cost;
+    const card = el("div", "rec-card");
+    card.innerHTML = `
+      <div class="rec-head"><span class="brain-dot">◈</span> COORDINATION ADVISES</div>
+      <div class="rec-reason">${rec.reason}</div>
+    `;
+    const actions = el("div", "rec-actions");
+    const accept = el("button", "rec-accept" + (afford ? "" : " poor")) as HTMLButtonElement;
+    accept.disabled = !afford;
+    accept.textContent = afford ? `Accept · place ${p!.name} ($${p!.cost})` : `Need $${p?.cost ?? "?"}`;
+    accept.onclick = () => this.cb.onAcceptRec();
+    const dismiss = el("button", "rec-dismiss") as HTMLButtonElement;
+    dismiss.textContent = "Dismiss";
+    dismiss.onclick = () => this.cb.onDismissRec();
+    actions.append(accept, dismiss);
+    card.append(actions);
+    return card;
   }
 
   private paletteCard(p: Placeable, state: GameState): HTMLElement {

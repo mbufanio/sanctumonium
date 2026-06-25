@@ -26,9 +26,18 @@ import type { Drone, PlacedDevice, RealtimeState, WaveDef } from "./types.ts";
  */
 const UNTRACKED_PENALTY = 0.2;
 
+/** Coordinated shots are more reliable (fused tracks + timing), capped below 1. */
+const COORD_ACCURACY = 1.25;
+
 export interface StepEnv {
   /** Plane radius at which drones spawn (just beyond the field edge). */
   spawnRadius: number;
+  /**
+   * Brain coordination active (spec §12 face 1). When true, effectors
+   * DECONFLICT — no two waste fire on the same drone in a step — and prioritise
+   * the most dangerous tracked threats. Same hardware, better used.
+   */
+  coordinated?: boolean;
 }
 
 export interface KillInfo {
@@ -89,15 +98,30 @@ export function stepWave(
   // 3. Effectors engage. Each fires at most once per cooldown at the best
   //    target it can actually affect (effect > 0), preferring tracked drones
   //    and then whichever is closest to the asset.
+  //
+  //    WITHOUT the brain, effectors choose independently — so several pile onto
+  //    the same most-central drone and waste shots (drones die in one hit).
+  //    WITH the brain (env.coordinated), fire is DECONFLICTED: a drone already
+  //    claimed this step is skipped, so the same hardware kills more per volley.
+  const claimed = env.coordinated ? new Set<number>() : null;
   for (const e of effectors) {
     e.cooldown = Math.max(0, e.cooldown - dt);
     if (e.cooldown > 0) continue;
     const eff = EFFECTOR_TYPES[e.placeableId as EffectorTypeId];
-    const target = pickTarget(rt.drones, e, eff);
+    const target = pickTarget(rt.drones, e, eff, claimed);
     if (!target) continue;
+    if (claimed) claimed.add(target.id);
 
     e.cooldown = effectorCooldown(e.placeableId as EffectorTypeId);
-    const p = hitChance(eff.id, target.typeId, target.tracked);
+    // Coordination handoff: show the sensor passing the track to this effector.
+    if (env.coordinated && target.tracked) {
+      const s = trackingSensor(target, sensors);
+      if (s) rt.fx.push({ kind: "handoff", from: s.pos, to: target.pos });
+    }
+    // Fused tracks + optimal shot timing make a coordinated shot more reliable
+    // (same hardware, better used). Deconfliction above prevents wasted volleys.
+    let p = hitChance(eff.id, target.typeId, target.tracked);
+    if (env.coordinated && p > 0) p = Math.min(0.98, p * COORD_ACCURACY);
     const hit = rng.chance(p);
     rt.fx.push({ kind: "shot", from: e.pos, to: target.pos, effector: e.placeableId, hit });
     if (hit) {
@@ -128,16 +152,19 @@ function isTracked(d: Drone, sensors: PlacedDevice[]): boolean {
   return false;
 }
 
-/** Best target for an effector: in range, affectable, tracked-first, then nearest the asset. */
+/** Best target for an effector: in range, affectable, tracked-first, then nearest the asset.
+ *  When `claimed` is provided (coordinated), drones already taken this step are skipped. */
 function pickTarget(
   drones: Drone[],
   e: PlacedDevice,
   eff: { effect: Record<ThreatTypeId, number> },
+  claimed: Set<number> | null,
 ): Drone | null {
   let best: Drone | null = null;
   let bestScore = -Infinity;
   for (const d of drones) {
     if (d.state !== "alive") continue;
+    if (claimed?.has(d.id)) continue; // already being engaged this step
     if (eff.effect[d.typeId] <= 0) continue; // can't affect this type — ignore it
     if (planeDist(e.pos, d.pos) > e.radius) continue;
     // Prefer tracked drones, then those closest to the asset (smallest radius).
@@ -145,6 +172,22 @@ function pickTarget(
     if (score > bestScore) {
       bestScore = score;
       best = d;
+    }
+  }
+  return best;
+}
+
+/** The nearest in-range sensor that can actually track this drone (for handoff fx). */
+function trackingSensor(d: Drone, sensors: PlacedDevice[]): PlacedDevice | null {
+  let best: PlacedDevice | null = null;
+  let bestDist = Infinity;
+  for (const s of sensors) {
+    const sen = SENSOR_TYPES[s.placeableId as SensorTypeId];
+    if (sen.track[d.typeId] <= 0) continue;
+    const dist = planeDist(s.pos, d.pos);
+    if (dist <= s.radius && dist < bestDist) {
+      bestDist = dist;
+      best = s;
     }
   }
   return best;

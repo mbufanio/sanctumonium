@@ -23,6 +23,7 @@ import { placeableById, TRACKED_KILL_BONUS } from "./sim/realtime/catalog.ts";
 import { createRealtimeState } from "./sim/realtime/types.ts";
 import { stepWave } from "./sim/realtime/engine.ts";
 import { SCHEDULE, bossConfigFromLayout } from "./sim/realtime/schedule.ts";
+import { adaptWave, recommendPlacement, type Recommendation } from "./sim/realtime/adaptive.ts";
 import { computeOptimal, emptyAssignment, resolveEncounter } from "./sim/boss/engine.ts";
 import { WorldRenderer } from "./render/world.ts";
 import { BossConsole } from "./ui/bossConsole.ts";
@@ -42,6 +43,8 @@ export class Game {
   private accumulator = 0;
   private currentBossIndex: 1 | 2 | null = null;
   private pointerHex: Hex | null = null;
+  private currentRec: Recommendation | null = null;
+  private recDismissed = false;
 
   constructor(overlay: HTMLElement) {
     this.state = createInitialState(LEVEL_1);
@@ -64,6 +67,8 @@ export class Game {
       onSelectPlaceable: (id) => this.selectPlaceable(id),
       onStartWave: () => this.startScheduleEntry(),
       onSell: (id) => this.sell(id),
+      onAcceptRec: () => this.acceptRecommendation(),
+      onDismissRec: () => this.dismissRecommendation(),
     });
   }
 
@@ -100,7 +105,8 @@ export class Game {
   private stepWavePhase(dt: number): void {
     const s = this.state;
     if (!s.rt || !s.activeWave) return;
-    const res = stepWave(s.rt, s.placed, s.activeWave, dt, this.rng, { spawnRadius: this.world.spawnRadius(s) });
+    const coordinated = s.brainUnlocked && !s.brainStaffDisabled;
+    const res = stepWave(s.rt, s.placed, s.activeWave, dt, this.rng, { spawnRadius: this.world.spawnRadius(s), coordinated });
 
     for (const k of res.kills) {
       s.currency += k.bounty;
@@ -145,7 +151,19 @@ export class Game {
       this.endRun(true);
       return;
     }
-    this.hud.showBuild(s, this.nextEntryLabel());
+    this.recDismissed = false;
+    this.refreshBuildDock();
+  }
+
+  /** Recompute the brain recommendation (after unlock) and (re)render the dock. */
+  private refreshBuildDock(): void {
+    const s = this.state;
+    if (s.phase !== "build") return;
+    this.currentRec =
+      s.brainUnlocked && !s.brainStaffDisabled && !this.recDismissed
+        ? recommendPlacement(s.placed, s.currency, this.world.spawnRadius(s), s.level.rings)
+        : null;
+    this.hud.showBuild(s, this.nextEntryLabel(), this.currentRec);
   }
 
   private nextEntryLabel(): string {
@@ -166,9 +184,11 @@ export class Game {
     if (entry.type === "wave") {
       s.phase = "wave";
       s.rt = createRealtimeState();
-      s.activeWave = entry.wave;
+      // Adaptive enemy: bias this wave's spawns toward the layout's seams.
+      s.activeWave = adaptWave(entry.wave, s.placed, this.world.spawnRadius(s), this.rng);
       for (const d of s.placed) d.cooldown = 0;
       s.selectedPlaceable = null;
+      this.world.setGhost(null);
       this.hud.hideBuild();
     } else {
       this.startBoss(entry.bossIndex);
@@ -265,7 +285,25 @@ export class Game {
 
   private selectPlaceable(id: string): void {
     this.state.selectedPlaceable = this.state.selectedPlaceable === id ? null : id;
-    this.hud.showBuild(this.state, this.nextEntryLabel());
+    this.refreshBuildDock();
+  }
+
+  /** Accept the brain's suggestion: place the recommended device (spec §12 face 3). */
+  private acceptRecommendation(): void {
+    const s = this.state;
+    const rec = this.currentRec;
+    if (!rec) return;
+    const p = placeableById(rec.placeableId);
+    if (!p || s.currency < p.cost) return;
+    if (s.placed.some((d) => hexKey(d.hex) === hexKey(rec.hex))) return;
+    s.currency -= p.cost;
+    s.placed.push(makePlaced(p.id, rec.hex));
+    this.refreshBuildDock();
+  }
+
+  private dismissRecommendation(): void {
+    this.recDismissed = true;
+    this.refreshBuildDock();
   }
 
   private installInput(): void {
@@ -304,7 +342,7 @@ export class Game {
     s.placed.push(makePlaced(p.id, hex));
     // Deselect if the next one is no longer affordable, else keep placing.
     if (s.currency < p.cost) s.selectedPlaceable = null;
-    this.hud.showBuild(s, this.nextEntryLabel());
+    this.refreshBuildDock();
     this.updateGhost();
   }
 
@@ -316,7 +354,7 @@ export class Game {
     const p = placeableById(dev.placeableId);
     if (p) s.currency += Math.floor(p.cost * SELL_REFUND);
     s.placed.splice(idx, 1);
-    this.hud.showBuild(s, this.nextEntryLabel());
+    this.refreshBuildDock();
   }
 
   private isPlaceable(hex: Hex): boolean {

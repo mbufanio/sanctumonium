@@ -17,6 +17,7 @@ import { placeableById, TRACKED_KILL_BONUS } from "./catalog.ts";
 import { createRealtimeState, type PlacedDevice } from "./types.ts";
 import { stepWave } from "./engine.ts";
 import { SCHEDULE, bossConfigFromLayout } from "./schedule.ts";
+import { adaptWave } from "./adaptive.ts";
 import { computeOptimal, emptyAssignment } from "../boss/engine.ts";
 import { resolveEncounter } from "../boss/engine.ts";
 import type { AssignmentMap, BossConfig } from "../boss/types.ts";
@@ -119,6 +120,7 @@ function simulateRun(strat: Strategy, seed: number): RunResult {
   let waveSeconds = 0;
   let buildPhases = 0;
   let bossPhases = 0;
+  let brainUnlocked = false; // unlocks after boss #1, like the real run
 
   const placed: PlacedDevice[] = [makePlaced("radar", { q: 0, r: -1 }), makePlaced("net-drone", { q: 0, r: 1 })];
   const occupied = new Set(placed.map((d) => `${d.hex.q},${d.hex.r}`));
@@ -145,9 +147,11 @@ function simulateRun(strat: Strategy, seed: number): RunResult {
     doBuild();
     if (entry.type === "wave") {
       const rt = createRealtimeState();
+      // Adaptive enemy probes this layout's seams; brain coordinates post-unlock.
+      const wave = adaptWave(entry.wave, placed, SPAWN_RADIUS, rng);
       let t = 0;
       for (let i = 0; i < 6000 && integrity > 0; i++) {
-        const res = stepWave(rt, placed, entry.wave, 1 / 60, rng, { spawnRadius: SPAWN_RADIUS });
+        const res = stepWave(rt, placed, wave, 1 / 60, rng, { spawnRadius: SPAWN_RADIUS, coordinated: brainUnlocked });
         for (const k of res.kills) { currency += k.bounty; score += k.bounty * (k.tracked ? TRACKED_KILL_BONUS : 1); kills++; }
         for (const l of res.leaks) { integrity -= l.damage; leaks++; }
         t += 1 / 60;
@@ -161,6 +165,7 @@ function simulateRun(strat: Strategy, seed: number): RunResult {
       const map = strat.boss === "optimal" ? computeOptimal(cfg) : naiveAssign(cfg);
       const res = resolveEncounter(cfg, map, rng);
       score += res.stopped * 120;
+      if (entry.bossIndex === 1) brainUnlocked = true;
     }
     if (integrity <= 0) break;
   }
@@ -219,8 +224,14 @@ describe("BALANCE & PACING ANALYSIS", () => {
     expect(agg["brute-force"].winPct).toBe(0);
   });
 
-  it("a coordinated layout reliably wins", () => {
-    expect(agg["coordinated"].winPct).toBeGreaterThanOrEqual(95);
+  it("a coordinated layout reliably wins (even against the seam-probing enemy)", () => {
+    expect(agg["coordinated"].winPct).toBeGreaterThanOrEqual(80);
+  });
+
+  it("ignoring sensors (untracked fire) is badly punished by the adaptive enemy", () => {
+    // The seam-prober finds the tracking gaps — sensor-less play should be far
+    // less reliable than coordinated.
+    expect(agg["effectors-only"].winPct).toBeLessThan(agg["coordinated"].winPct - 25);
   });
 
   it("coordination scores clearly higher than every alternative (the leaderboard rewards the lesson)", () => {

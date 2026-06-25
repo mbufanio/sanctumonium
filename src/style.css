@@ -579,3 +579,58 @@ body {
 .final-score { margin: 1rem auto 1.4rem; }
 .fs-k { font-family: var(--mono); letter-spacing: 0.2em; font-size: 0.74rem; color: var(--text-dim); }
 .fs-v { font-size: clamp(2.4rem, 7vw, 4rem); font-weight: 800; color: var(--brain-gold); line-height: 1; }
+
+/* ---- Phase 3: brain recommendation card (build dock) -------------------- */
+
+.rec-card {
+  pointer-events: auto;
+  width: min(620px, 92vw);
+  margin-bottom: 0.2rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--brain);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(0, 229, 255, 0.10), rgba(0, 229, 255, 0.03));
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.rec-head { font-family: var(--mono); letter-spacing: 0.16em; font-size: 0.74rem; color: var(--brain); }
+.rec-reason { font-size: 0.95rem; color: var(--text); line-height: 1.35; }
+.rec-actions { display: flex; gap: 0.5rem; }
+.rec-accept {
+  pointer-events: auto; cursor: pointer;
+  flex: 1; min-height: 44px;
+  font-family: var(--font); font-weight: 700; font-size: 0.92rem;
+  border: none; border-radius: 9px;
+  color: #04222b;
+  background: linear-gradient(180deg, #66f3ff, var(--brain));
+  box-shadow: 0 4px 14px rgba(0, 229, 255, 0.4);
+}
+.rec-accept:not(:disabled):active { transform: translateY(1px); }
+.rec-accept.poor { opacity: 0.5; cursor: default; }
+.rec-dismiss {
+  pointer-events: auto; cursor: pointer;
+  min-height: 44px; padding: 0 1rem;
+  font-family: var(--font); font-weight: 600; font-size: 0.88rem;
+  border: 1px solid var(--panel-edge); border-radius: 9px;
+  background: transparent; color: var(--text-dim);
+}
+
+/* coordination-active indicator (post-unlock) */
+.hud-coord {
+  margin-left: auto;
+  align-self: center;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  color: var(--brain);
+  border: 1px solid var(--brain);
+  border-radius: 8px;
+  padding: 0.35rem 0.7rem;
+  text-shadow: 0 0 14px rgba(0, 229, 255, 0.5);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.18) inset;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.hud-coord.on { opacity: 1; }

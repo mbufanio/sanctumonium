@@ -236,7 +236,7 @@ export class WorldRenderer {
     const rt = state.rt;
     if (rt && rt.fx.length) {
       for (const fx of rt.fx) {
-        const ttl = fx.kind === "shot" ? 0.12 : fx.kind === "kill" ? 0.3 : 0.4;
+        const ttl = fx.kind === "shot" ? 0.12 : fx.kind === "handoff" ? 0.22 : fx.kind === "kill" ? 0.3 : 0.4;
         this.activeFx.push({ fx, age: 0, ttl });
       }
       rt.fx = [];
@@ -261,6 +261,11 @@ export class WorldRenderer {
       } else if (a.fx.kind === "leak") {
         const at = planeToPixel(a.fx.at);
         this.fxGfx.circle(at.x, at.y, 8 + (1 - k) * 18).stroke({ color: COLORS.bad, width: 2.5, alpha: k });
+      } else if (a.fx.kind === "handoff") {
+        // Brain coordination: a track being handed from sensor to effector.
+        const from = planeToPixel(a.fx.from);
+        const to = planeToPixel(a.fx.to);
+        this.fxGfx.moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({ color: COLORS.brain, width: 1, alpha: 0.55 * k });
       }
     }
     this.activeFx = survivors;
