@@ -30,6 +30,8 @@ import { WorldRenderer } from "./render/world.ts";
 import { BossConsole } from "./ui/bossConsole.ts";
 import { Screens } from "./ui/screens.ts";
 import { Hud } from "./ui/hud.ts";
+import { LeaderboardUI } from "./ui/leaderboard.ts";
+import type { RunStats } from "./leaderboard/rules.ts";
 
 const FIXED_DT = 1 / 60;
 const SELL_REFUND = 0.6;
@@ -40,6 +42,7 @@ export class Game {
   private console: BossConsole;
   private screens: Screens;
   private hud: Hud;
+  private leaderboard: LeaderboardUI;
   private rng: Rng;
   private accumulator = 0;
   private currentBossIndex: 1 | 2 | null = null;
@@ -74,6 +77,7 @@ export class Game {
       onSellDevice: () => this.sellSelectedDevice(),
       onCloseDevice: () => this.closeDevicePanel(),
     });
+    this.leaderboard = new LeaderboardUI(overlay, { onRestart: () => this.restart() });
   }
 
   async start(host: HTMLElement): Promise<void> {
@@ -82,6 +86,12 @@ export class Game {
     this.installLoop(this.world.app);
     this.installInput();
     this.installStaffToggle();
+    // Dedicated second-screen attract display: index.html?display=board
+    if (new URLSearchParams(location.search).get("display") === "board") {
+      this.state.phase = "summary"; // park the sim; just show the live board
+      this.leaderboard.showLive(this.state.level.id);
+      return;
+    }
     this.goTitle();
   }
 
@@ -116,9 +126,11 @@ export class Game {
       s.currency += k.bounty;
       // Scoring rewards coordination: a tracked kill is worth more (spec §8).
       s.score += k.bounty * (k.tracked ? TRACKED_KILL_BONUS : 1.0);
+      s.kills++;
     }
     for (const lk of res.leaks) {
       s.integrity -= lk.damage;
+      s.leaked++;
     }
     if (s.integrity <= 0) {
       s.integrity = 0;
@@ -136,6 +148,7 @@ export class Game {
     this.state.rt = null;
     this.console.clear();
     this.hud.clear();
+    this.leaderboard.clear();
     this.screens.title();
   }
 
@@ -207,6 +220,7 @@ export class Game {
     if (s.activeWave) {
       s.currency += s.activeWave.stipend;
       s.score += s.activeWave.stipend * 0.4;
+      s.wavesSurvived++;
     }
     s.scheduleIndex++;
     this.enterBuild();
@@ -270,12 +284,19 @@ export class Game {
     this.console.clear();
     this.hud.clear();
     this.world.setGhost(null);
-    this.screens.summary({
-      victory,
+    const stats: RunStats = {
+      levelId: s.level.id,
       score: s.score,
-      boss1: s.log.boss1 ? `${s.log.boss1.stopped}/${s.log.boss1.results.length}` : "—",
-      boss2: s.log.boss2 ? `${s.log.boss2.stopped}/${s.log.boss2.results.length}` : "—",
-    });
+      wavesSurvived: s.wavesSurvived,
+      kills: s.kills,
+      leaked: s.leaked,
+      spent: s.spent,
+      integrity: Math.max(0, Math.round(s.integrity)),
+      victory,
+      boss1Stopped: s.log.boss1?.stopped ?? 0,
+      boss2Stopped: s.log.boss2?.stopped ?? 0,
+    };
+    this.leaderboard.showSubmit(stats);
   }
 
   private restart(): void {
@@ -305,6 +326,7 @@ export class Game {
     const step = p ? nextUpgrade(p, dev.level) : null;
     if (!step || s.currency < step.cost) return;
     s.currency -= step.cost;
+    s.spent += step.cost;
     upgradeDevice(dev);
     this.refreshBuildDock();
   }
@@ -333,6 +355,7 @@ export class Game {
     if (!p || s.currency < p.cost) return;
     if (s.placed.some((d) => hexKey(d.hex) === hexKey(rec.hex))) return;
     s.currency -= p.cost;
+    s.spent += p.cost;
     s.placed.push(makePlaced(p.id, rec.hex));
     this.refreshBuildDock();
   }
@@ -384,6 +407,7 @@ export class Game {
     const p = placeableById(s.selectedPlaceable);
     if (!p || s.currency < p.cost) return;
     s.currency -= p.cost;
+    s.spent += p.cost;
     s.placed.push(makePlaced(p.id, hex));
     // Deselect if the next one is no longer affordable, else keep placing.
     if (s.currency < p.cost) s.selectedPlaceable = null;
@@ -477,6 +501,12 @@ export class Game {
 
   private installStaffToggle(): void {
     window.addEventListener("keydown", (e) => {
+      // Staff: 'L' toggles the live leaderboard from the title screen.
+      if (e.key.toLowerCase() === "l" && (this.state.phase === "title" || this.leaderboard.liveActive)) {
+        if (this.leaderboard.liveActive) this.goTitle();
+        else this.leaderboard.showLive(this.state.level.id);
+        return;
+      }
       if (e.key.toLowerCase() !== "b") return;
       this.state.brainStaffDisabled = !this.state.brainStaffDisabled;
       const s = this.state.boss;

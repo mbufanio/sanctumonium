@@ -7,7 +7,7 @@ real branding, product names, model numbers, or performance figures. See
 [`CUAS_TRADESHOW_GAME_SPEC.md`](./CUAS_TRADESHOW_GAME_SPEC.md) for the full
 design intent — it is the source of truth.
 
-## Status — Phases 0–4
+## Status — Phases 0–5
 
 The build is sequenced so the slice proving the value proposition ships first
 (spec §14). Implemented so far:
@@ -76,6 +76,23 @@ brain unlock → Boss #2 (clean win) → side-by-side summary + conversion hando
   The scoring guardrail holds at every tier: even with the fictional high-end,
   coordinated play outscores brute-force spam (~5000 vs ~1400 in the harness).
 
+- **Phase 5 — Persistent leaderboard + takeaway.** A real hosted backend plus a
+  localStorage fallback so the static demo still works:
+  - **Backend** (`server/`, dependency-free Node): `POST /api/scores` and
+    `GET /api/leaderboard?level=&board=alltime|today`, JSON-file store, CORS,
+    per-IP rate limiting, and server-side anti-abuse (handle sanitization +
+    profanity masking, a plausibility cap derived from the schedule). Run with
+    `npm run server`.
+  - **Client** talks to `VITE_API_BASE`; if unset/unreachable it uses a
+    localStorage demo board (seeded so it's not empty). One shared rules module
+    (`src/leaderboard/rules.ts`) is used by server, client, and tests so
+    validation can't drift.
+  - **Run-end flow**: score submission (call sign + affiliation), the board
+    (all-time / today tabs, per level, the player highlighted), and a one-page
+    **takeaway report** rendered to a downloadable PNG (optional email capture).
+  - **Live attract board** (`?display=board`, or press **L** at the title): a
+    full-screen, auto-refreshing second-screen display.
+
 ### The teaching matchups (spec §6)
 
 Odds depend on three *legible* factors — effector-vs-threat-type, whether the
@@ -96,14 +113,30 @@ npm run dev        # http://localhost:5173
 ```
 
 Other scripts: `npm run build` (typecheck + production bundle),
-`npm run preview` (serve the build), `npm test` (engine unit tests),
-`npm run typecheck`.
+`npm run preview` (serve the build), `npm test` (engine + balance + leaderboard
+tests), `npm run typecheck`.
+
+### Leaderboard backend (optional)
+
+The game runs fine with no backend (it uses a localStorage demo board). For the
+real persistent, cross-kiosk board, run the API and point the frontend at it:
+
+```bash
+npm run server                       # serves the API on :8787 (Node 22+)
+VITE_API_BASE=http://localhost:8787 npm run dev   # frontend uses it
+```
+
+The server (`server/index.ts`) is dependency-free and run via Node's TypeScript
+support. Deploy it anywhere Node runs; every kiosk sets `VITE_API_BASE` to the
+one instance so they share a board. `PORT` and `DATA_PATH` are configurable.
 
 ### Booth / staff controls
 
 - Press **`B`** during a boss fight (after the brain is unlocked) to toggle the
   coordination brain off/on — the staff "watch your odds go dark" sales tool
   (spec §6.2). A toast confirms the state.
+- Press **`L`** at the title (or open `?display=board`) for the full-screen
+  live leaderboard — the second-screen attract display.
 
 ## Architecture
 
@@ -132,13 +165,22 @@ src/
   render/
     world.ts           # PixiJS world: hex ground + dynamic layer (devices,
                        #   coverage, drones, fx)
+  leaderboard/         # persistent scores (spec §10)
+    rules.ts           # shared: sanitize, plausibility cap, ranking (server+client)
+    client.ts          # API client with localStorage demo fallback
+    rules.test.ts      # validation / anti-abuse / ranking tests
   ui/
     bossConsole.ts     # the interactive DOM/SVG assignment console
     hud.ts             # build/wave HUD (palette, economy, integrity, score)
     screens.ts         # title / unlock / summary narrative overlays
+    leaderboard.ts     # submit / board / takeaway / live-board UI
+    takeaway.ts        # one-page report rendered to a downloadable PNG
   theme.ts             # the color & signal language (spec §3)
   game.ts              # controller: state, loop, transitions, staff toggle
   main.ts              # entry point
+server/                # leaderboard backend (run via `npm run server`)
+  index.ts             # dependency-free Node HTTP API (validate, rate-limit, CORS)
+  store.ts             # JSON-file persistence (swappable for SQLite/Postgres)
 ```
 
 ## Resolved design decisions (spec §13)
@@ -150,8 +192,8 @@ recommendations (Phase 3).
 
 ## Not yet built
 
-Phases 5–7: the persistent leaderboard + takeaway artifact, additional sites
-(airport / energy / stadium, each with a new threat wrinkle), and booth
-hardening (attract/idle mode, auto-reset, kiosk fullscreen lock, the staff
-brain-toggle as a polished sales tool, performance pass). See the spec for the
-full plan.
+Phases 6–7: additional sites (airport / energy / stadium, each with a new
+threat wrinkle — swarms, low-RCS, autonomy, fiber-controlled), and booth
+hardening (attract/idle auto-demo, auto-reset between players, kiosk fullscreen
+lock, a performance pass for the heavy finale, and a colorblind/touch-target
+audit). See the spec for the full plan.

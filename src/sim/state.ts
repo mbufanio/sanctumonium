@@ -46,6 +46,12 @@ export interface GameState {
   integrity: number;
   maxIntegrity: number;
 
+  // Run tallies (for scoring, the takeaway artifact, and plausibility).
+  kills: number;
+  leaked: number;
+  wavesSurvived: number;
+  spent: number;
+
   /** Highest device tier currently unlocked in the palette (spec §7 climb). */
   maxTier: Tier;
 
@@ -118,6 +124,10 @@ export function createInitialState(level: LevelDef): GameState {
     score: 0,
     integrity: 100,
     maxIntegrity: 100,
+    kills: 0,
+    leaked: 0,
+    wavesSurvived: 0,
+    spent: 0,
     maxTier: 1,
     scheduleIndex: 0,
     rt: null,
