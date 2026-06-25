@@ -108,6 +108,17 @@ brain unlock → Boss #2 (clean win) → side-by-side summary + conversion hando
   Wrinkles are expressed via the threat MIX and per-spawn modifiers
   (speed/bounty/leak/size) plus small level flags — no new threat types.
 
+  **Terrain & line-of-sight** (`src/sim/terrain.ts`) make placement a spatial
+  puzzle: **blocker** cells (structures) block both tracking and engagement LOS,
+  and **no-fire** zones (runways, crowds) block effector fire across them but not
+  tracking. LOS is sampled along the plane-space segment; **area effectors
+  ignore per-target LOS**, so they shine where direct fire is blocked. The engine,
+  the adaptive enemy's coverage map, the brain's recommendations, and placement
+  are all terrain-aware. Per-site layouts: **Energy** flat (the clean starter),
+  **Military** mixed blockers + a fire-inhibit zone, **Airport** two runway
+  no-fire lines, **Stadium** dense urban blockers (and the line-of-sight laser is
+  restricted there). Energy leads as the booth's opener.
+
 ### The teaching matchups (spec §6)
 
 Odds depend on three *legible* factors — effector-vs-threat-type, whether the
@@ -163,7 +174,8 @@ src/
   sim/                 # pure TypeScript — no Pixi, deterministic
     rng.ts             # seedable PRNG (fair, reproducible scoring)
     hex.ts             # hexagonal grid math (axial coords, asset-centred 360°)
-    level.ts           # the four sites as data (field, asset, budget, schedule, wrinkle)
+    level.ts           # the four sites as data (field, asset, budget, schedule, wrinkle, terrain)
+    terrain.ts         # blockers + no-fire zones, line-of-sight sampling
     state.ts           # the single authoritative game-state + phase machine
     boss/
       types.ts         # boss-minigame domain types

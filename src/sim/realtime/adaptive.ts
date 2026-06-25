@@ -26,32 +26,34 @@ import {
   type Px,
 } from "../hex.ts";
 import { LEAK_RADIUS, placeableById } from "./catalog.ts";
+import { losClear, type TerrainMap } from "../terrain.ts";
 import type { PlacedDevice, WaveDef } from "./types.ts";
 
 const BINS = 24; // bearing buckets (15° each)
+const NO_TERRAIN: TerrainMap = new Map();
 
 function pointAt(bearingDeg: number, r: number): Px {
   const rad = ((bearingDeg - 90) * Math.PI) / 180;
   return { x: Math.cos(rad) * r, y: Math.sin(rad) * r };
 }
 
-/** Is point `p` tracked by some sensor that can see a generic drone there? */
-function trackedAt(p: Px, sensors: PlacedDevice[]): boolean {
+/** Is point `p` tracked by some sensor with clear sight (terrain-aware)? */
+function trackedAt(p: Px, sensors: PlacedDevice[], terrain: TerrainMap): boolean {
   // Use the best-case (rf-quad) trackability for a coverage estimate.
-  return sensors.some((s) => s.track["rf-quad"] > 0 && planeDist(s.pos, p) <= s.radius);
+  return sensors.some((s) => s.track["rf-quad"] > 0 && planeDist(s.pos, p) <= s.radius && losClear(s.pos, p, terrain, false));
 }
 
-/** Is point `p` inside some effector's reach? */
-function inEffectorReach(p: Px, effectors: PlacedDevice[]): boolean {
-  return effectors.some((e) => planeDist(e.pos, p) <= e.radius);
+/** Is point `p` inside some effector's reach with a clear firing line? */
+function inEffectorReach(p: Px, effectors: PlacedDevice[], terrain: TerrainMap): boolean {
+  return effectors.some((e) => planeDist(e.pos, p) <= e.radius && losClear(e.pos, p, terrain, true));
 }
 
 /**
  * Fraction of the approach path along `bearing` that is "kill-covered" (an
- * effector can reach it AND a sensor tracks it). 1 = fully defended, 0 = a
- * wide-open seam.
+ * effector can reach it AND a sensor tracks it, both with clear LOS). 1 = fully
+ * defended, 0 = a wide-open seam.
  */
-export function bearingStrength(placed: PlacedDevice[], spawnRadius: number, bearing: number): number {
+export function bearingStrength(placed: PlacedDevice[], spawnRadius: number, bearing: number, terrain: TerrainMap = NO_TERRAIN): number {
   const sensors = placed.filter((p) => p.kind === "sensor");
   const effectors = placed.filter((p) => p.kind === "effector");
   let covered = 0;
@@ -59,16 +61,16 @@ export function bearingStrength(placed: PlacedDevice[], spawnRadius: number, bea
   for (let r = spawnRadius; r >= LEAK_RADIUS; r -= 18) {
     total++;
     const p = pointAt(bearing, r);
-    if (inEffectorReach(p, effectors) && trackedAt(p, sensors)) covered++;
+    if (inEffectorReach(p, effectors, terrain) && trackedAt(p, sensors, terrain)) covered++;
   }
   return total ? covered / total : 0;
 }
 
 /** Per-bin weakness (1 - strength) around the full 360°. */
-export function seamWeakness(placed: PlacedDevice[], spawnRadius: number): number[] {
+export function seamWeakness(placed: PlacedDevice[], spawnRadius: number, terrain: TerrainMap = NO_TERRAIN): number[] {
   const out: number[] = [];
   for (let i = 0; i < BINS; i++) {
-    out.push(1 - bearingStrength(placed, spawnRadius, (360 / BINS) * i));
+    out.push(1 - bearingStrength(placed, spawnRadius, (360 / BINS) * i, terrain));
   }
   return out;
 }
@@ -83,9 +85,9 @@ export function waveAdaptiveness(index: number): number {
  * adaptiveness 0 → unchanged/uniform; 1 → strongly concentrated on weak bins.
  * Returns a NEW WaveDef so the template stays pure.
  */
-export function adaptWave(wave: WaveDef, placed: PlacedDevice[], spawnRadius: number, rng: Rng): WaveDef {
+export function adaptWave(wave: WaveDef, placed: PlacedDevice[], spawnRadius: number, rng: Rng, terrain: TerrainMap = NO_TERRAIN): WaveDef {
   const adaptiveness = waveAdaptiveness(wave.index);
-  const weak = seamWeakness(placed, spawnRadius);
+  const weak = seamWeakness(placed, spawnRadius, terrain);
   // Weight bins by weakness, sharpened by adaptiveness. The floor keeps the
   // enemy from funnelling 100% at the single weakest bin (a bit of spread).
   const exp = 1 + adaptiveness * 4;
@@ -160,13 +162,15 @@ export function recommendPlacement(
   currency: number,
   spawnRadius: number,
   maxRings: number,
+  terrain: TerrainMap = NO_TERRAIN,
+  occupiedExtra: Set<string> = new Set(),
 ): Recommendation | null {
-  const occupied = new Set(placed.map((d) => hexKey(d.hex)));
+  const occupied = new Set([...placed.map((d) => hexKey(d.hex)), ...occupiedExtra]);
   const effectors = placed.filter((p) => p.kind === "effector");
   const sensors = placed.filter((p) => p.kind === "sensor");
 
   // 1. Worst seam — is there an approach an effector can't even reach?
-  const weak = seamWeakness(placed, spawnRadius);
+  const weak = seamWeakness(placed, spawnRadius, terrain);
   let worstBin = 0;
   for (let i = 1; i < weak.length; i++) if (weak[i] > weak[worstBin]) worstBin = i;
   const worstBearing = (360 / BINS) * worstBin;

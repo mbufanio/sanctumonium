@@ -103,7 +103,10 @@ export class Hud {
       dock.append(hint);
 
       const palette = el("div", "palette");
-      for (const p of placeablesForTier(state.maxTier)) palette.append(this.paletteCard(p, state));
+      for (const p of placeablesForTier(state.maxTier)) {
+        if (state.level.restrictedPlaceables.includes(p.id)) continue; // e.g. urban → no laser
+        palette.append(this.paletteCard(p, state));
+      }
       dock.append(palette);
     }
 

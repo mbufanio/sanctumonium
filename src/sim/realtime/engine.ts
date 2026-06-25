@@ -14,9 +14,12 @@
  */
 import { Rng } from "../rng.ts";
 import { planeDist, planeLen, type Px } from "../hex.ts";
+import { losClear, type TerrainMap } from "../terrain.ts";
 import type { ThreatTypeId } from "../boss/types.ts";
 import { DRONE_SPECS, LEAK_RADIUS } from "./catalog.ts";
 import type { Drone, PlacedDevice, RealtimeState, SpawnEntry, WaveDef } from "./types.ts";
+
+const NO_TERRAIN: TerrainMap = new Map();
 
 /**
  * Effectiveness multiplier when firing on an untracked drone. Deliberately
@@ -31,6 +34,8 @@ const COORD_ACCURACY = 1.25;
 export interface StepEnv {
   /** Plane radius at which drones spawn (just beyond the field edge). */
   spawnRadius: number;
+  /** The site's terrain (blockers + no-fire zones) for line-of-sight. */
+  terrain?: TerrainMap;
   /**
    * Brain coordination active (spec §12 face 1). When true, effectors
    * DECONFLICT — no two waste fire on the same drone in a step — and prioritise
@@ -70,6 +75,7 @@ export function stepWave(
   rt.time += dt;
   const kills: KillInfo[] = [];
   const leaks: LeakInfo[] = [];
+  const terrain = env.terrain ?? NO_TERRAIN;
 
   // 1. Spawn any drones whose scheduled time has arrived.
   while (rt.spawnCursor < wave.spawns.length && wave.spawns[rt.spawnCursor].at <= rt.time) {
@@ -85,7 +91,7 @@ export function stepWave(
     if (d.state !== "alive") continue;
     const len = planeLen(d.pos) || 1;
     d.pos = { x: d.pos.x - (d.pos.x / len) * d.speed * dt, y: d.pos.y - (d.pos.y / len) * d.speed * dt };
-    d.tracked = isTracked(d, sensors);
+    d.tracked = isTracked(d, sensors, terrain);
     if (planeLen(d.pos) <= LEAK_RADIUS) {
       d.state = "leaked";
       rt.leaked++;
@@ -119,14 +125,14 @@ export function stepWave(
   for (const e of effectors) {
     e.cooldown = Math.max(0, e.cooldown - dt);
     if (e.cooldown > 0) continue;
-    const target = pickTarget(rt.drones, e, claimed);
+    const target = pickTarget(rt.drones, e, claimed, terrain);
     if (!target) continue;
     if (claimed) claimed.add(target.id);
 
     e.cooldown = e.fireInterval;
     // Coordination handoff: show the sensor passing the track to this effector.
     if (env.coordinated && target.tracked) {
-      const s = trackingSensor(target, sensors);
+      const s = trackingSensor(target, sensors, terrain);
       if (s) rt.fx.push({ kind: "handoff", from: s.pos, to: target.pos });
     }
     rt.fx.push({ kind: "shot", from: e.pos, to: target.pos, effector: e.placeableId, hit: true });
@@ -152,18 +158,21 @@ export function stepWave(
   return { kills, leaks, waveComplete };
 }
 
-/** A drone is tracked if any in-range sensor can see its type at all. */
-function isTracked(d: Drone, sensors: PlacedDevice[]): boolean {
+/** A drone is tracked if an in-range sensor can see its type — with clear LOS
+ *  (blockers obstruct sight; no-fire zones do not). */
+function isTracked(d: Drone, sensors: PlacedDevice[], terrain: TerrainMap): boolean {
   for (const s of sensors) {
     if (s.track[d.typeId] <= 0) continue;
-    if (planeDist(s.pos, d.pos) <= s.radius) return true;
+    if (planeDist(s.pos, d.pos) > s.radius) continue;
+    if (losClear(s.pos, d.pos, terrain, false)) return true;
   }
   return false;
 }
 
-/** Best target for an effector: in range, affectable, tracked-first, then nearest the asset.
- *  When `claimed` is provided (coordinated), drones already taken this step are skipped. */
-function pickTarget(drones: Drone[], e: PlacedDevice, claimed: Set<number> | null): Drone | null {
+/** Best target for an effector: in range, affectable, with a clear FIRING line
+ *  (blockers and no-fire zones both obstruct fire). When `claimed` is provided
+ *  (coordinated), drones already taken this step are skipped. */
+function pickTarget(drones: Drone[], e: PlacedDevice, claimed: Set<number> | null, terrain: TerrainMap): Drone | null {
   let best: Drone | null = null;
   let bestScore = -Infinity;
   for (const d of drones) {
@@ -171,6 +180,7 @@ function pickTarget(drones: Drone[], e: PlacedDevice, claimed: Set<number> | nul
     if (claimed?.has(d.id)) continue; // already being engaged this step
     if (e.effect[d.typeId] <= 0) continue; // can't affect this type — ignore it
     if (planeDist(e.pos, d.pos) > e.radius) continue;
+    if (!losClear(e.pos, d.pos, terrain, true)) continue; // building or no-fire zone in the way
     // Prefer tracked drones, then those closest to the asset (smallest radius).
     const score = (d.tracked ? 1000 : 0) - planeLen(d.pos);
     if (score > bestScore) {
@@ -182,13 +192,13 @@ function pickTarget(drones: Drone[], e: PlacedDevice, claimed: Set<number> | nul
 }
 
 /** The nearest in-range sensor that can actually track this drone (for handoff fx). */
-function trackingSensor(d: Drone, sensors: PlacedDevice[]): PlacedDevice | null {
+function trackingSensor(d: Drone, sensors: PlacedDevice[], terrain: TerrainMap): PlacedDevice | null {
   let best: PlacedDevice | null = null;
   let bestDist = Infinity;
   for (const s of sensors) {
     if (s.track[d.typeId] <= 0) continue;
     const dist = planeDist(s.pos, d.pos);
-    if (dist <= s.radius && dist < bestDist) {
+    if (dist <= s.radius && dist < bestDist && losClear(s.pos, d.pos, terrain, false)) {
       bestDist = dist;
       best = s;
     }

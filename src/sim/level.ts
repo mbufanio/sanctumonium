@@ -10,6 +10,7 @@
  */
 import type { Hex } from "./hex.ts";
 import { makeWave, type ScheduleEntry } from "./realtime/schedule.ts";
+import { cells, hexCluster, hexLine, type TerrainCell } from "./terrain.ts";
 
 export interface AssetDef {
   id: string;
@@ -36,6 +37,10 @@ export interface LevelDef {
   integrity: number;
   /** Spec §9 airport wrinkle: a leak also costs score (operations disrupted). */
   leakScorePenalty: number;
+  /** Structures (blockers) and no-fire zones that obstruct line-of-sight. */
+  terrain: TerrainCell[];
+  /** Placeable ids not buildable here (e.g. urban → no line-of-sight laser). */
+  restrictedPlaceables: string[];
   /** This site's run schedule (normal waves + the two boss fights). */
   schedule: ScheduleEntry[];
 }
@@ -54,6 +59,13 @@ const MILITARY: LevelDef = {
   startBudget: 120,
   integrity: 100,
   leakScorePenalty: 0,
+  // Mixed terrain: a couple of structures (blockers) and a fire-inhibit zone.
+  terrain: [
+    ...cells(hexCluster({ q: -3, r: 3 }, 1), "blocker"),
+    ...cells(hexCluster({ q: 4, r: -3 }, 1), "blocker"),
+    ...cells(hexLine({ q: -5, r: -1 }, { q: -2, r: -3 }), "nofire"),
+  ],
+  restrictedPlaceables: [],
   schedule: [
     { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 4 }], 60) },
     { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 6 }], 75) },
@@ -80,6 +92,12 @@ const AIRPORT: LevelDef = {
   startBudget: 140,
   integrity: 100,
   leakScorePenalty: 140,
+  // Two runways crossing the field — no-fire zones you can't engage across.
+  terrain: [
+    ...cells(hexLine({ q: -8, r: 6 }, { q: 8, r: -2 }), "nofire"),
+    ...cells(hexLine({ q: -8, r: 2 }, { q: 8, r: -6 }), "nofire"),
+  ],
+  restrictedPlaceables: [],
   schedule: [
     { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 5 }], 70) },
     { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 5 }, { typeId: "low-observable", count: 2 }], 90) },
@@ -103,19 +121,22 @@ const ENERGY: LevelDef = {
   rings: 8,
   asset: { id: "core", name: "Transformer Yard", pos: { q: 0, r: 0 }, radius: 1 },
   startBudget: 150,
-  integrity: 70, // fragile high-value asset — every leak really hurts
+  integrity: 90, // a touch fragile, but it's the approachable opener
   leakScorePenalty: 0,
+  // Flat, open ground — the cleanest site, and the booth's opener.
+  terrain: [],
+  restrictedPlaceables: [],
   schedule: [
-    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 3 }, { typeId: "autonomy", count: 2 }], 70) },
-    { type: "wave", wave: makeWave(2, [{ typeId: "autonomy", count: 4 }, { typeId: "rf-quad", count: 2 }], 90) },
+    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 4 }], 70) },
+    { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 4 }, { typeId: "autonomy", count: 2 }], 90) },
     BOSS_1,
     { type: "wave", wave: makeWave(3, [{ typeId: "autonomy", count: 5 }, { typeId: "low-observable", count: 2 }], 110) },
     { type: "wave", wave: makeWave(4, [{ typeId: "autonomy", count: 6 }, { typeId: "rf-quad", count: 3 }], 130) },
     { type: "wave", wave: makeWave(5, [{ typeId: "autonomy", count: 7 }, { typeId: "low-observable", count: 3 }], 150) },
     BOSS_2,
-    { type: "wave", wave: makeWave(6, [{ typeId: "autonomy", count: 9 }, { typeId: "low-observable", count: 4 }, { typeId: "rf-quad", count: 4 }], 180) },
-    { type: "wave", wave: makeWave(7, [{ typeId: "autonomy", count: 13 }, { typeId: "low-observable", count: 6 }, { typeId: "rf-quad", count: 5 }], 220) },
-    { type: "wave", wave: makeWave(8, [{ typeId: "autonomy", count: 20 }, { typeId: "low-observable", count: 9 }, { typeId: "rf-quad", count: 8 }], 320, "FINAL WAVE") },
+    { type: "wave", wave: makeWave(6, [{ typeId: "autonomy", count: 8 }, { typeId: "low-observable", count: 3 }, { typeId: "rf-quad", count: 4 }], 180) },
+    { type: "wave", wave: makeWave(7, [{ typeId: "autonomy", count: 10 }, { typeId: "low-observable", count: 5 }, { typeId: "rf-quad", count: 5 }], 220) },
+    { type: "wave", wave: makeWave(8, [{ typeId: "autonomy", count: 12 }, { typeId: "low-observable", count: 5 }, { typeId: "rf-quad", count: 7 }], 320, "FINAL WAVE") },
   ],
 };
 
@@ -133,6 +154,15 @@ const STADIUM: LevelDef = {
   startBudget: 160,
   integrity: 100,
   leakScorePenalty: 0,
+  // Dense urban venue: buildings block line-of-sight; the laser is impractical.
+  terrain: [
+    ...cells(hexCluster({ q: -4, r: -2 }, 1), "blocker"),
+    ...cells(hexCluster({ q: 4, r: 1 }, 1), "blocker"),
+    ...cells(hexCluster({ q: -2, r: 5 }, 1), "blocker"),
+    ...cells(hexCluster({ q: 5, r: -5 }, 1), "blocker"),
+    ...cells(hexCluster({ q: -6, r: 2 }, 1), "blocker"),
+  ],
+  restrictedPlaceables: ["laser"],
   schedule: [
     { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 8, mods: SWARM }], 70) },
     { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 12, mods: SWARM }], 95) },
@@ -147,11 +177,13 @@ const STADIUM: LevelDef = {
   ],
 };
 
-export const LEVELS: LevelDef[] = [MILITARY, AIRPORT, ENERGY, STADIUM];
+// Energy leads: flat open ground is the cleanest place to learn placement, so
+// it's the booth's opener (terrain complexity ramps up across the other sites).
+export const LEVELS: LevelDef[] = [ENERGY, MILITARY, AIRPORT, STADIUM];
 
 export function getLevel(id: string): LevelDef {
-  return LEVELS.find((l) => l.id === id) ?? MILITARY;
+  return LEVELS.find((l) => l.id === id) ?? ENERGY;
 }
 
-/** The default / lead level (built first, the booth's opener). */
-export const LEVEL_1 = MILITARY;
+/** The default / starter level (flat, clean — the booth's opener). */
+export const LEVEL_1 = ENERGY;

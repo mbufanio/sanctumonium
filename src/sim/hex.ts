@@ -81,6 +81,13 @@ export function planeToPixel(p: Px): Px {
   return { x: p.x, y: p.y * ISO_SQUASH };
 }
 
+/** Plane coords → nearest hex (inverse of hexToPlane, no squash). For LOS/terrain. */
+export function planeToHex(p: Px): Hex {
+  const q = p.x / (HEX_SIZE * 1.5);
+  const r = p.y / (HEX_SIZE * SQRT3) - q / 2;
+  return hexRound({ q, r });
+}
+
 /** Flat-top axial hex → pixel (with iso squash). Origin maps to (0,0). */
 export function hexToPixel(h: Hex): Px {
   return planeToPixel(hexToPlane(h));

@@ -13,6 +13,7 @@ import { Application } from "pixi.js";
 import { Rng, timeSeed } from "./sim/rng.ts";
 import { ringDistance, hexKey, type Hex } from "./sim/hex.ts";
 import { LEVEL_1, LEVELS, type LevelDef } from "./sim/level.ts";
+import { buildTerrain, isBlockedForBuild, type TerrainMap } from "./sim/terrain.ts";
 import {
   createInitialState,
   makePlaced,
@@ -49,6 +50,7 @@ export class Game {
   private pointerHex: Hex | null = null;
   private currentRec: Recommendation | null = null;
   private recDismissed = false;
+  private terrain: TerrainMap = new Map();
 
   constructor(overlay: HTMLElement) {
     this.state = createInitialState(LEVEL_1);
@@ -120,7 +122,7 @@ export class Game {
     const s = this.state;
     if (!s.rt || !s.activeWave) return;
     const coordinated = s.brainUnlocked && !s.brainStaffDisabled;
-    const res = stepWave(s.rt, s.placed, s.activeWave, dt, this.rng, { spawnRadius: this.world.spawnRadius(s), coordinated });
+    const res = stepWave(s.rt, s.placed, s.activeWave, dt, this.rng, { spawnRadius: this.world.spawnRadius(s), coordinated, terrain: this.terrain });
 
     for (const k of res.kills) {
       s.currency += k.bounty;
@@ -170,6 +172,7 @@ export class Game {
     const staffDisabled = this.state.brainStaffDisabled;
     this.state = createInitialState(level);
     this.state.brainStaffDisabled = staffDisabled;
+    this.terrain = buildTerrain(level.terrain);
     this.currentBossIndex = null;
     this.world.drawStatic(this.state);
     this.screens.clear();
@@ -199,7 +202,7 @@ export class Game {
     if (s.phase !== "build") return;
     this.currentRec =
       s.brainUnlocked && !s.brainStaffDisabled && !this.recDismissed
-        ? recommendPlacement(s.placed, s.currency, this.world.spawnRadius(s), s.level.rings)
+        ? recommendPlacement(s.placed, s.currency, this.world.spawnRadius(s), s.level.rings, this.terrain, new Set(this.terrain.keys()))
         : null;
     this.hud.showBuild(s, this.nextEntryLabel(), this.currentRec);
   }
@@ -223,7 +226,7 @@ export class Game {
       s.phase = "wave";
       s.rt = createRealtimeState();
       // Adaptive enemy: bias this wave's spawns toward the layout's seams.
-      s.activeWave = adaptWave(entry.wave, s.placed, this.world.spawnRadius(s), this.rng);
+      s.activeWave = adaptWave(entry.wave, s.placed, this.world.spawnRadius(s), this.rng, this.terrain);
       for (const d of s.placed) d.cooldown = 0;
       s.selectedPlaceable = null;
       s.selectedDeviceId = null;
@@ -451,6 +454,7 @@ export class Game {
     const s = this.state;
     if (ringDistance(hex) === 0) return false; // centre is the asset
     if (ringDistance(hex) > s.level.rings) return false; // off-field
+    if (isBlockedForBuild(this.terrain, hex)) return false; // structure / no-fire zone
     return !s.placed.some((d) => hexKey(d.hex) === hexKey(hex));
   }
 

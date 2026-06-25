@@ -115,6 +115,21 @@ export class WorldRenderer {
       const band = ringDistance(h) % 2 === 0 ? COLORS.groundFill : COLORS.groundLight;
       this.hexTile(this.ground, c, band, COLORS.groundLine);
     }
+    // Terrain: structures (blockers) as raised iso blocks; no-fire zones as
+    // warm hatched tiles you can't build on or fire across.
+    for (const t of lvl.terrain) {
+      const c = hexToPixel(t.hex);
+      if (t.kind === "blocker") {
+        this.hexTile(this.ground, c, 0x1a2735, COLORS.panelEdge, 0.95);
+        this.isoBlock(this.ground, c.x, c.y, 0.82, 17, 0x2b3c4f, 0x3c5168);
+      } else {
+        this.hexTile(this.ground, c, 0x3a241a, COLORS.seam, 0.5);
+        // hatch marks
+        const pts = hexCorners(c);
+        this.ground.moveTo(pts[0].x, pts[0].y).lineTo(pts[3].x, pts[3].y).stroke({ color: COLORS.seam, width: 1, alpha: 0.35 });
+        this.ground.moveTo(pts[1].x, pts[1].y).lineTo(pts[4].x, pts[4].y).stroke({ color: COLORS.seam, width: 1, alpha: 0.35 });
+      }
+    }
   }
 
   /** Per-frame dynamic draw: rings, sweep, coverage, devices, drones, fx. */
