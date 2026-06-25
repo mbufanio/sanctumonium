@@ -805,6 +805,18 @@ body {
 .wrinkle-tag { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.12em; color: var(--brain-gold); border: 1px solid var(--brain-gold); border-radius: 4px; padding: 0.05rem 0.3rem; margin-right: 0.4rem; }
 @media (max-width: 720px) { .site-grid { grid-template-columns: 1fr; } }
 
+/* Low-integrity danger vignette — a red edge-glow whose opacity the renderer
+   drives from asset integrity (with a heartbeat pulse). Sits above the canvas,
+   below the UI overlay, and never eats input. */
+#danger-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(120% 110% at 50% 50%, transparent 52%, rgba(255, 84, 112, 0.16) 78%, rgba(255, 60, 90, 0.42) 100%);
+}
+
 /* ---- Phase 7: booth hardening (attract, staff panel, colorblind) -------- */
 
 #attract-overlay {

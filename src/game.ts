@@ -120,6 +120,7 @@ export class Game {
         this.accumulator -= FIXED_DT;
         steps++;
       }
+      this.world.setSelected(this.state.selectedDeviceId);
       this.world.update(this.state);
       if (this.state.phase === "build" || this.state.phase === "wave") this.hud.update(this.state);
     });

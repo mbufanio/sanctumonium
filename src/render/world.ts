@@ -34,6 +34,22 @@ interface ActiveFx {
 
 /** Cap on simultaneously-animated effects (perf for the swarm finale). */
 const MAX_FX = 220;
+/** Cap on lightweight juice particles (spawn flashes, kill sparks). */
+const MAX_SPARKS = 160;
+/** How many recent positions a drone's motion trail remembers. */
+const TRAIL_LEN = 7;
+
+/** A cheap render-only particle (never touches the sim). */
+interface Spark {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+  ttl: number;
+  color: number;
+  size: number;
+}
 
 interface Ghost {
   placeableId: string;
@@ -57,8 +73,13 @@ export class WorldRenderer {
   private labelLayer = new Container();
   private labels = new Map<string, Text>();
   private activeFx: ActiveFx[] = [];
+  private sparks: Spark[] = [];
+  private trails = new Map<number, Px[]>();
+  private seenDrones = new Set<number>();
   private ghost: Ghost | null = null;
   private mounted = false;
+  private dangerEl: HTMLDivElement | null = null;
+  private selectedId: string | null = null;
 
   constructor() {
     this.app = new Application();
@@ -85,9 +106,21 @@ export class WorldRenderer {
       this.fxGfx,
       this.labelLayer,
     );
+    // Low-integrity danger vignette — a CSS edge-glow that pulses red as the
+    // asset takes damage. Pointer-transparent, behind the overlay UI.
+    const danger = document.createElement("div");
+    danger.id = "danger-vignette";
+    document.body.appendChild(danger);
+    this.dangerEl = danger;
+
     this.mounted = true;
     this.layout();
     window.addEventListener("resize", () => this.layout());
+  }
+
+  /** The currently-selected device, so its marker can pulse. */
+  setSelected(id: string | null): void {
+    this.selectedId = id;
   }
 
   private layout(): void {
@@ -149,7 +182,15 @@ export class WorldRenderer {
     const r = lvl.rings * HEX_SIZE * 1.5;
     const ang = state.time * 0.7;
     this.sweep.clear();
-    this.sweep.moveTo(c.x, c.y).arc(c.x, c.y, r, ang, ang + 0.4).lineTo(c.x, c.y).fill({ color: COLORS.coverage, alpha: 0.06 });
+    // A trailing comet of wedges (older = dimmer) plus a bright leading edge —
+    // reads like an actual radar sweep rather than a flat slice.
+    const trail = 6;
+    for (let i = trail; i >= 1; i--) {
+      const a0 = ang - i * 0.12;
+      this.sweep.moveTo(c.x, c.y).arc(c.x, c.y, r, a0, a0 + 0.13).lineTo(c.x, c.y).fill({ color: COLORS.coverage, alpha: 0.012 * (trail - i + 1) });
+    }
+    this.sweep.moveTo(c.x, c.y).arc(c.x, c.y, r, ang, ang + 0.12).lineTo(c.x, c.y).fill({ color: COLORS.coverage, alpha: 0.1 });
+    this.sweep.moveTo(c.x, c.y).lineTo(c.x + Math.cos(ang) * r, c.y + Math.sin(ang) * r).stroke({ color: COLORS.coverage, width: 1.5, alpha: 0.3 });
     this.sweep.scale.set(1, ISO_SQUASH);
     this.sweep.position.set(0, c.y * (1 - ISO_SQUASH));
 
@@ -159,6 +200,17 @@ export class WorldRenderer {
     this.syncDeviceLabels(state);
     this.drawDrones(state);
     this.drawFx(state);
+    this.updateDanger(state);
+  }
+
+  /** Pulse a red edge-vignette harder as asset integrity falls. */
+  private updateDanger(state: GameState): void {
+    if (!this.dangerEl) return;
+    const frac = Math.max(0, state.integrity / state.maxIntegrity);
+    // Calm above half integrity; ramps in below, with a heartbeat pulse.
+    const danger = frac >= 0.5 ? 0 : (0.5 - frac) / 0.5;
+    const pulse = 0.75 + 0.25 * Math.sin(state.time * 6);
+    this.dangerEl.style.opacity = (danger * pulse).toFixed(3);
   }
 
   // ---- coverage & devices ------------------------------------------------
@@ -181,13 +233,29 @@ export class WorldRenderer {
     // Integrity ring: shrinks/reddens as the asset takes damage.
     const frac = Math.max(0, state.integrity / state.maxIntegrity);
     const ringColor = frac > 0.5 ? COLORS.asset : frac > 0.25 ? COLORS.seam : COLORS.bad;
+    // Breathing halo — soft concentric rings that gently pulse, so the thing
+    // you're protecting always reads as "alive" and worth defending.
+    const breath = 0.5 + 0.5 * Math.sin(state.time * 1.6);
+    for (let i = 0; i < 3; i++) {
+      const rr = HEX_SIZE * (1.6 + i * 0.32) + breath * 4;
+      this.assetGfx.ellipse(ac.x, ac.y, rr, rr * ISO_SQUASH).stroke({ color: COLORS.asset, width: 1, alpha: 0.06 + 0.05 * breath - i * 0.018 });
+    }
     this.assetGfx.ellipse(ac.x, ac.y, HEX_SIZE * 1.4, HEX_SIZE * 1.4 * ISO_SQUASH).stroke({ color: ringColor, width: 2, alpha: 0.5 });
     this.isoBlock(this.assetGfx, ac.x, ac.y, 1.0, 30, COLORS.friendlyDim, COLORS.friendly);
+    // Beacon core with a pulsing glow.
+    this.assetGfx.circle(ac.x, ac.y - 34, 7 + breath * 2.5).fill({ color: COLORS.assetCore, alpha: 0.18 });
     this.assetGfx.circle(ac.x, ac.y - 34, 4).fill(COLORS.assetCore);
 
     // Device markers: sensors = teal rings, effectors = blue squares.
+    const selPulse = 0.5 + 0.5 * Math.sin(state.time * 5);
     for (const d of state.placed) {
       const s = planeToPixel(d.pos);
+      const color = d.kind === "sensor" ? COLORS.coverage : COLORS.friendly;
+      // Soft glow halo so devices pop off the ground.
+      this.assetGfx.circle(s.x, s.y, 12).fill({ color, alpha: 0.1 });
+      if (d.id === this.selectedId) {
+        this.assetGfx.circle(s.x, s.y, 13 + selPulse * 4).stroke({ color: COLORS.brainGold, width: 1.5, alpha: 0.4 + 0.4 * selPulse });
+      }
       if (d.kind === "sensor") {
         this.assetGfx.circle(s.x, s.y, 7).fill({ color: COLORS.panel }).stroke({ color: COLORS.coverage, width: 2 });
       } else {
@@ -239,15 +307,52 @@ export class WorldRenderer {
   private drawDrones(state: GameState): void {
     this.dronesGfx.clear();
     const rt = state.rt;
-    if (!rt) return;
+    if (!rt) {
+      this.trails.clear();
+      this.seenDrones.clear();
+      return;
+    }
+    const live = new Set<number>();
     for (const d of rt.drones) {
+      live.add(d.id);
       const s = planeToPixel(d.pos);
       const sz = 6 * d.size; // swarm micro-drones are smaller
+
+      // Spawn flash — a quick warm pop the first frame a drone appears, so new
+      // threats announce themselves at the field edge.
+      if (!this.seenDrones.has(d.id)) {
+        this.seenDrones.add(d.id);
+        this.burst(s.x, s.y, COLORS.threat, 5, 26);
+      }
+
+      // Motion trail — a fading comet behind each drone.
+      let tr = this.trails.get(d.id);
+      if (!tr) { tr = []; this.trails.set(d.id, tr); }
+      tr.push(s);
+      if (tr.length > TRAIL_LEN) tr.shift();
+      for (let i = 1; i < tr.length; i++) {
+        const k = i / tr.length;
+        this.dronesGfx.moveTo(tr[i - 1].x, tr[i - 1].y).lineTo(tr[i].x, tr[i].y).stroke({ color: COLORS.threat, width: sz * 0.45 * k, alpha: 0.28 * k });
+      }
+
       // Tracked drones get a cyan lock ring (brain accent reserved for boss;
       // here a neutral track ring in coverage teal).
       if (d.tracked) this.dronesGfx.circle(s.x, s.y, sz + 3).stroke({ color: COLORS.coverage, width: 1, alpha: 0.7 });
       this.triangle(this.dronesGfx, s.x, s.y, sz, COLORS.threatDeep, COLORS.threat);
     }
+    // Drop trails/seen-marks for drones that left the field (killed or leaked).
+    for (const id of this.trails.keys()) if (!live.has(id)) this.trails.delete(id);
+    for (const id of this.seenDrones) if (!live.has(id)) this.seenDrones.delete(id);
+  }
+
+  /** Emit a radial burst of sparks (render-only juice). */
+  private burst(x: number, y: number, color: number, count: number, speed: number): void {
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + (x + y) * 0.013;
+      const v = speed * (0.6 + 0.4 * ((i * 7 + 3) % 5) / 5);
+      this.sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v * ISO_SQUASH, age: 0, ttl: 0.4, color, size: 2 });
+    }
+    if (this.sparks.length > MAX_SPARKS) this.sparks.splice(0, this.sparks.length - MAX_SPARKS);
   }
 
   private drawFx(state: GameState): void {
@@ -257,6 +362,17 @@ export class WorldRenderer {
       for (const fx of rt.fx) {
         const ttl = fx.kind === "shot" ? 0.12 : fx.kind === "handoff" ? 0.22 : fx.kind === "aoe" ? 0.45 : fx.kind === "kill" ? 0.3 : 0.4;
         this.activeFx.push({ fx, age: 0, ttl });
+        // One-time juice as effects arrive (so bursts fire once, not per frame).
+        if (fx.kind === "kill") {
+          const at = planeToPixel(fx.at);
+          this.burst(at.x, at.y, COLORS.good, 8, 60);
+        } else if (fx.kind === "shot" && fx.hit) {
+          const to = planeToPixel(fx.to);
+          this.burst(to.x, to.y, fx.effector === "rf-jammer" ? COLORS.brain : COLORS.friendly, 3, 22);
+        } else if (fx.kind === "aoe") {
+          const at = planeToPixel(fx.at);
+          this.burst(at.x, at.y, aoeColor(fx.effector), 10, 90);
+        }
       }
       rt.fx = [];
       // Perf cap for the heavy swarm finale: keep only the newest effects so
@@ -277,6 +393,8 @@ export class WorldRenderer {
         const to = planeToPixel(a.fx.to);
         const color = a.fx.hit ? (a.fx.effector === "rf-jammer" ? COLORS.brain : COLORS.friendly) : COLORS.textDim;
         this.fxGfx.moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({ color, width: a.fx.effector === "rf-jammer" ? 2 : 1.5, alpha: 0.5 + 0.5 * k });
+        // Muzzle flash at the effector for the first instant of the shot.
+        if (k > 0.6) this.fxGfx.circle(from.x, from.y, 2 + (k - 0.6) * 10).fill({ color, alpha: (k - 0.6) * 1.6 });
       } else if (a.fx.kind === "kill") {
         const at = planeToPixel(a.fx.at);
         this.fxGfx.circle(at.x, at.y, 6 + (1 - k) * 14).stroke({ color: COLORS.good, width: 2, alpha: k });
@@ -300,6 +418,19 @@ export class WorldRenderer {
       }
     }
     this.activeFx = survivors;
+
+    // Spark particles (spawn flashes, kill bursts) — drift out and fade.
+    const live: Spark[] = [];
+    for (const p of this.sparks) {
+      p.age += dt;
+      const k = 1 - p.age / p.ttl;
+      if (k <= 0) continue;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      live.push(p);
+      this.fxGfx.circle(p.x, p.y, p.size * k + 0.5).fill({ color: p.color, alpha: 0.85 * k });
+    }
+    this.sparks = live;
   }
 
   // ---- primitives --------------------------------------------------------
