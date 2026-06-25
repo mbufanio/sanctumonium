@@ -7,7 +7,7 @@ real branding, product names, model numbers, or performance figures. See
 [`CUAS_TRADESHOW_GAME_SPEC.md`](./CUAS_TRADESHOW_GAME_SPEC.md) for the full
 design intent — it is the source of truth.
 
-## Status — Phases 0 & 1 (the proof)
+## Status — Phases 0, 1 & 2
 
 The build is sequenced so the slice proving the value proposition ships first
 (spec §14). Implemented so far:
@@ -31,6 +31,18 @@ The build is sequenced so the slice proving the value proposition ships first
 
 The full arc runs: title → Boss #1 (narrow win) → operator "call for help" →
 brain unlock → Boss #2 (clean win) → side-by-side summary + conversion handoff.
+
+- **Phase 2 — Auto-defense + economy.** The boss minigame is now wrapped in the
+  real-time tower-defense loop on the centred hex field. Between waves the
+  player taps the field to place sensors/effectors (live coverage footprints,
+  buy/sell). During a wave, drones spawn at the field edge and path to the
+  centre from all 360°; placed sensors track and effectors auto-engage with the
+  same matchup truth as the boss (a jammer still does nothing to an autonomy
+  drone — it sails through). Kills earn currency; leaks damage asset integrity;
+  a per-wave stipend + per-kill bounty drive the economy, and tracked kills
+  score higher (coordination is rewarded). The two boss fights are interleaved
+  in the wave schedule and **fought on the layout the player actually built**.
+  The run ends on a score (site held, or asset overrun).
 
 ### The teaching matchups (spec §6)
 
@@ -78,10 +90,18 @@ src/
       data.ts          # threat/sensor/effector tables + Boss #1 / Boss #2
       engine.ts        # odds, optimal-assignment search, resolution
       engine.test.ts   # matchup legibility + calibration tests
+    realtime/          # Phase 2 real-time wave defense (pure TS)
+      catalog.ts       # placeable devices + drone specs (shared boss stats)
+      types.ts         # drone / placed-device / wave / realtime-state types
+      engine.ts        # spawn, path, track, auto-engage, leaks (deterministic)
+      schedule.ts      # wave schedule + boss-from-the-built-layout wiring
+      *.test.ts        # engine + schedule + boss-wiring tests
   render/
-    world.ts           # PixiJS isometric world renderer (reads state)
+    world.ts           # PixiJS world: hex ground + dynamic layer (devices,
+                       #   coverage, drones, fx)
   ui/
     bossConsole.ts     # the interactive DOM/SVG assignment console
+    hud.ts             # build/wave HUD (palette, economy, integrity, score)
     screens.ts         # title / unlock / summary narrative overlays
   theme.ts             # the color & signal language (spec §3)
   game.ts              # controller: state, loop, transitions, staff toggle
@@ -97,7 +117,8 @@ recommendations (Phase 3).
 
 ## Not yet built
 
-Phases 2–7: real-time auto-defense + economy, the adaptive enemy and the
-brain's other two faces, the tech gradient + finale, the persistent
-leaderboard + takeaway, additional sites, and booth hardening (attract mode,
-auto-reset, kiosk lock). See the spec for the full plan.
+Phases 3–7: the adaptive enemy and the brain's other two faces (real-time
+coordination + between-round layout recommendations), the tech gradient +
+finale, the persistent leaderboard + takeaway, additional sites, and booth
+hardening (attract mode, auto-reset, kiosk lock). See the spec for the full
+plan.

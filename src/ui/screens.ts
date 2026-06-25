@@ -61,21 +61,25 @@ export class Screens {
     this.root.append(s);
   }
 
-  summary(brain1: string, brain2: string): void {
+  summary(info: { victory: boolean; score: number; boss1: string; boss2: string }): void {
     this.clear();
     const s = screen("summary-screen");
     s.innerHTML = `
-      <div class="screen-kicker">DEFENSE COMPLETE</div>
-      <h1 class="screen-h1">Two runs. Same hardware.</h1>
+      <div class="screen-kicker">${info.victory ? "SITE HELD" : "ASSET OVERRUN"}</div>
+      <h1 class="screen-h1">${info.victory ? "You held the line." : "The site fell."}</h1>
+      <div class="final-score">
+        <div class="fs-k">FINAL SCORE</div>
+        <div class="fs-v">${Math.floor(info.score).toLocaleString()}</div>
+      </div>
       <div class="compare">
         <div class="compare-col off">
-          <div class="compare-h">MANUAL</div>
-          <div class="compare-v">${brain1}</div>
+          <div class="compare-h">BOSS · MANUAL</div>
+          <div class="compare-v">${info.boss1}</div>
           <div class="compare-note">Odds hidden</div>
         </div>
         <div class="compare-col on">
-          <div class="compare-h">COORDINATED</div>
-          <div class="compare-v">${brain2}</div>
+          <div class="compare-h">BOSS · COORDINATED</div>
+          <div class="compare-v">${info.boss2}</div>
           <div class="compare-note">Odds visible · fire deconflicted</div>
         </div>
       </div>

@@ -1,0 +1,79 @@
+/**
+ * Real-time entity & state types (spec §5). The simulation runs in plane space
+ * (unsquashed); the renderer applies the iso squash. Pure data.
+ */
+import type { Hex, Px } from "../hex.ts";
+import type { ThreatTypeId } from "../boss/types.ts";
+import type { DeviceKind } from "./catalog.ts";
+
+/** A device the player has placed on the hex field. */
+export interface PlacedDevice {
+  id: string;
+  kind: DeviceKind;
+  placeableId: string;
+  hex: Hex;
+  pos: Px;
+  radius: number;
+  /** Effectors: remaining seconds until the next shot may fire. */
+  cooldown: number;
+}
+
+export type DroneState = "alive" | "killed" | "leaked";
+
+/** A live drone attacking the asset. */
+export interface Drone {
+  id: number;
+  typeId: ThreatTypeId;
+  pos: Px;
+  speed: number;
+  hp: number;
+  bounty: number;
+  leakDamage: number;
+  state: DroneState;
+  /** True while at least one capable, in-range sensor is tracking it. */
+  tracked: boolean;
+}
+
+/** Transient visual events produced by a sim step (consumed by the renderer). */
+export type Fx =
+  | { kind: "shot"; from: Px; to: Px; effector: string; hit: boolean }
+  | { kind: "kill"; at: Px }
+  | { kind: "leak"; at: Px; damage: number };
+
+/** A queued spawn: emit a drone of `typeId` at sim time `at`, bearing `bearing`. */
+export interface SpawnEntry {
+  at: number;
+  typeId: ThreatTypeId;
+  bearing: number;
+}
+
+export type WaveKind = "normal" | "boss";
+
+export interface WaveDef {
+  index: number;
+  kind: WaveKind;
+  label: string;
+  /** normal waves: the spawn script. boss waves: empty (handled by the console). */
+  spawns: SpawnEntry[];
+  /** Currency granted when the wave is cleared. */
+  stipend: number;
+}
+
+/** The live real-time simulation state for the current wave. */
+export interface RealtimeState {
+  /** Seconds elapsed in the current wave. */
+  time: number;
+  drones: Drone[];
+  nextDroneId: number;
+  /** Index into the active wave's spawn list. */
+  spawnCursor: number;
+  /** Pending visual events since the last render read. */
+  fx: Fx[];
+  /** Tallies for scoring/economy. */
+  killed: number;
+  leaked: number;
+}
+
+export function createRealtimeState(): RealtimeState {
+  return { time: 0, drones: [], nextDroneId: 1, spawnCursor: 0, fx: [], killed: 0, leaked: 0 };
+}

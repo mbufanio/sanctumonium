@@ -68,6 +68,14 @@ body {
   pointer-events: auto;
 }
 
+/* The HUD bar and build dock must let field taps pass THROUGH their empty
+   areas to the canvas (for device placement); only their controls capture
+   input. Higher specificity than the `#overlay > *` rule above. */
+#overlay .hud-bar,
+#overlay .build-dock {
+  pointer-events: none;
+}
+
 .fatal {
   margin: auto;
   color: var(--bad);
@@ -482,3 +490,92 @@ body {
   .boss-scope { grid-column: 1; grid-row: 2; max-height: 40vh; }
   .boss-controls, .boss-result { grid-column: 1; grid-row: 3; }
 }
+
+/* ---- Phase 2: build / wave HUD ----------------------------------------- */
+
+.hud-bar {
+  pointer-events: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 0.7rem 1.2rem;
+  background: linear-gradient(180deg, rgba(6, 13, 21, 0.92), rgba(6, 13, 21, 0));
+}
+.hud-stat { display: flex; flex-direction: column; gap: 0.1rem; }
+.hud-stat.integrity { flex: 0 0 220px; }
+.hud-k { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.16em; color: var(--text-dim); }
+.hud-v { font-family: var(--mono); font-size: 1.3rem; font-weight: 800; color: var(--text); line-height: 1; }
+.hud-v.funds { color: var(--brain-gold); }
+.integ-bar {
+  position: relative;
+  height: 18px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  border: 1px solid var(--panel-edge);
+}
+.integ-fill { height: 100%; border-radius: 9px 0 0 9px; transition: width 0.2s ease; }
+.integ-fill.ok { background: linear-gradient(90deg, #2dd4bf, #4ade80); }
+.integ-fill.warn { background: linear-gradient(90deg, #ffb020, #ffd166); }
+.integ-fill.crit { background: linear-gradient(90deg, #ff5470, #ff8a5b); }
+.integ-num { position: absolute; right: 8px; top: 0; line-height: 18px; font-family: var(--mono); font-size: 0.74rem; font-weight: 700; color: #04131c; }
+
+.build-dock {
+  pointer-events: none;
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem 1rem 1.2rem;
+  background: linear-gradient(0deg, rgba(6, 13, 21, 0.95), rgba(6, 13, 21, 0));
+}
+.build-hint { font-size: 0.85rem; color: var(--text-dim); font-family: var(--font); }
+.palette { pointer-events: auto; display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: center; }
+.pal-card {
+  pointer-events: auto;
+  cursor: pointer;
+  width: 168px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+  padding: 0.6rem 0.7rem;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  transition: border-color 0.12s ease, transform 0.08s ease, opacity 0.12s ease;
+}
+.pal-card:not(:disabled):active { transform: scale(0.98); }
+.pal-card.sel { border-color: var(--brain-gold); box-shadow: 0 0 0 1px var(--brain-gold), 0 0 18px rgba(255, 209, 102, 0.25); }
+.pal-card.poor { opacity: 0.45; cursor: default; }
+.pal-top { display: flex; justify-content: space-between; align-items: center; }
+.pal-code { font-family: var(--mono); font-size: 0.7rem; font-weight: 700; padding: 0.12rem 0.4rem; border-radius: 5px; border: 1px solid var(--panel-edge); }
+.pal-code.sensor { color: var(--coverage); }
+.pal-code.effector { color: var(--friendly); }
+.pal-cost { font-family: var(--mono); font-weight: 700; color: var(--brain-gold); }
+.pal-name { font-weight: 700; font-size: 0.92rem; }
+.pal-role { font-size: 0.72rem; color: var(--text-dim); line-height: 1.25; }
+
+.btn-start {
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 0.6rem;
+  font-family: var(--font); font-weight: 800; font-size: 1.05rem;
+  border: none; border-radius: 12px;
+  padding: 0.9rem 2rem; min-height: 52px;
+  color: #04222b;
+  background: linear-gradient(180deg, #7fe7ff, var(--friendly));
+  box-shadow: 0 8px 24px rgba(79, 195, 247, 0.35);
+}
+.btn-start:active { transform: translateY(2px); }
+.start-arrow { font-size: 0.85rem; }
+
+/* final score on the summary screen */
+.final-score { margin: 1rem auto 1.4rem; }
+.fs-k { font-family: var(--mono); letter-spacing: 0.2em; font-size: 0.74rem; color: var(--text-dim); }
+.fs-v { font-size: clamp(2.4rem, 7vw, 4rem); font-weight: 800; color: var(--brain-gold); line-height: 1; }

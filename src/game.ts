@@ -1,51 +1,69 @@
 /**
- * Game controller (spec §2, §6) — owns the authoritative state, the
- * fixed-timestep sim loop, and the phase transitions that drive the emotional
- * arc. It wires the Pixi world, the boss console, and the narrative screens.
+ * Game controller (spec §2, §5, §6) — owns the authoritative state, the
+ * fixed-timestep loop, and the phase transitions that drive the run:
  *
- * Phase 0+1 arc: title → boss(brain off) → unlock → boss(brain on) → summary.
+ *   title → build → wave → build → … → boss(off) → unlock → … → boss(on)
+ *         → … → summary (score), or summary early if the asset is overrun.
+ *
+ * It wires the Pixi world, the real-time engine, the build/wave HUD, the boss
+ * console, and the narrative screens. Boss fights are built from the layout the
+ * player placed (spec §14 Phase 2).
  */
 import { Application } from "pixi.js";
 import { Rng, timeSeed } from "./sim/rng.ts";
+import { ringDistance, hexKey, type Hex } from "./sim/hex.ts";
 import { LEVEL_1 } from "./sim/level.ts";
-import { createInitialState, type BossSession, type GameState } from "./sim/state.ts";
-import { BOSS_1, BOSS_2 } from "./sim/boss/data.ts";
 import {
-  computeOptimal,
-  emptyAssignment,
-  resolveEncounter,
-} from "./sim/boss/engine.ts";
-import type { BossConfig } from "./sim/boss/types.ts";
+  createInitialState,
+  makePlaced,
+  type BossSession,
+  type GameState,
+} from "./sim/state.ts";
+import { placeableById } from "./sim/realtime/catalog.ts";
+import { createRealtimeState } from "./sim/realtime/types.ts";
+import { stepWave } from "./sim/realtime/engine.ts";
+import { SCHEDULE, bossConfigFromLayout } from "./sim/realtime/schedule.ts";
+import { computeOptimal, emptyAssignment, resolveEncounter } from "./sim/boss/engine.ts";
 import { WorldRenderer } from "./render/world.ts";
 import { BossConsole } from "./ui/bossConsole.ts";
 import { Screens } from "./ui/screens.ts";
+import { Hud } from "./ui/hud.ts";
 
-const FIXED_DT = 1 / 60; // seconds per sim step
+const FIXED_DT = 1 / 60;
+const SELL_REFUND = 0.6;
 
 export class Game {
   private state: GameState;
   private world: WorldRenderer;
   private console: BossConsole;
   private screens: Screens;
+  private hud: Hud;
   private rng: Rng;
   private accumulator = 0;
+  private currentBossIndex: 1 | 2 | null = null;
+  private pointerHex: Hex | null = null;
 
   constructor(overlay: HTMLElement) {
     this.state = createInitialState(LEVEL_1);
     this.rng = new Rng(timeSeed());
     this.world = new WorldRenderer();
     this.console = new BossConsole(overlay, {
-      onSelectThreat: (id) => this.selectThreat(id),
-      onAssignSensor: (id) => this.assign("sensor", id),
-      onAssignEffector: (id) => this.assign("effector", id),
-      onApplyOptimal: () => this.applyOptimal(),
-      onEngage: () => this.engage(),
+      onSelectThreat: (id) => this.bossSelectThreat(id),
+      onAssignSensor: (id) => this.bossAssign("sensor", id),
+      onAssignEffector: (id) => this.bossAssign("effector", id),
+      onApplyOptimal: () => this.bossApplyOptimal(),
+      onEngage: () => this.bossEngage(),
       onContinue: () => this.afterBoss(),
     });
     this.screens = new Screens(overlay, {
-      onStart: () => this.startBoss(BOSS_1, false),
-      onUnlockContinue: () => this.startBoss(BOSS_2, true),
+      onStart: () => this.startRun(),
+      onUnlockContinue: () => this.afterUnlock(),
       onRestart: () => this.restart(),
+    });
+    this.hud = new Hud(overlay, {
+      onSelectPlaceable: (id) => this.selectPlaceable(id),
+      onStartWave: () => this.startScheduleEntry(),
+      onSell: (id) => this.sell(id),
     });
   }
 
@@ -53,6 +71,7 @@ export class Game {
     await this.world.init(host);
     this.world.drawStatic(this.state);
     this.installLoop(this.world.app);
+    this.installInput();
     this.installStaffToggle();
     this.goTitle();
   }
@@ -64,12 +83,39 @@ export class Game {
       this.accumulator += ticker.deltaMS / 1000;
       let steps = 0;
       while (this.accumulator >= FIXED_DT && steps < 5) {
-        this.state.time += FIXED_DT;
+        this.fixedStep(FIXED_DT);
         this.accumulator -= FIXED_DT;
         steps++;
       }
       this.world.update(this.state);
+      if (this.state.phase === "build" || this.state.phase === "wave") this.hud.update(this.state);
     });
+  }
+
+  private fixedStep(dt: number): void {
+    this.state.time += dt;
+    if (this.state.phase === "wave") this.stepWavePhase(dt);
+  }
+
+  private stepWavePhase(dt: number): void {
+    const s = this.state;
+    if (!s.rt || !s.activeWave) return;
+    const res = stepWave(s.rt, s.placed, s.activeWave, dt, this.rng, { spawnRadius: this.world.spawnRadius(s) });
+
+    for (const k of res.kills) {
+      s.currency += k.bounty;
+      // Scoring rewards coordination: a tracked kill is worth more (spec §8).
+      s.score += k.bounty * (k.tracked ? 1.5 : 1.0);
+    }
+    for (const lk of res.leaks) {
+      s.integrity -= lk.damage;
+    }
+    if (s.integrity <= 0) {
+      s.integrity = 0;
+      this.endRun(false);
+      return;
+    }
+    if (res.waveComplete) this.completeWave();
   }
 
   // ---- phase transitions -------------------------------------------------
@@ -77,12 +123,74 @@ export class Game {
   private goTitle(): void {
     this.state.phase = "title";
     this.state.boss = null;
+    this.state.rt = null;
     this.console.clear();
+    this.hud.clear();
     this.screens.title();
   }
 
-  private startBoss(cfg: BossConfig, brainIntended: boolean): void {
-    const brain = brainIntended && !this.state.brainStaffDisabled;
+  private startRun(): void {
+    this.screens.clear();
+    this.enterBuild();
+  }
+
+  /** Between-waves build phase (spec §13: between-waves only). */
+  private enterBuild(): void {
+    const s = this.state;
+    s.phase = "build";
+    s.rt = null;
+    s.activeWave = null;
+    this.console.clear();
+    if (s.scheduleIndex >= SCHEDULE.length) {
+      this.endRun(true);
+      return;
+    }
+    this.hud.showBuild(s, this.nextEntryLabel());
+  }
+
+  private nextEntryLabel(): string {
+    const entry = SCHEDULE[this.state.scheduleIndex];
+    if (!entry) return "Finish";
+    if (entry.type === "boss") return `⚠ Boss attack — Step ${this.state.scheduleIndex + 1}`;
+    return `Start ${entry.wave.label}`;
+  }
+
+  /** Player pressed "start" in the build dock → run the next schedule entry. */
+  private startScheduleEntry(): void {
+    const s = this.state;
+    const entry = SCHEDULE[s.scheduleIndex];
+    if (!entry) {
+      this.endRun(true);
+      return;
+    }
+    if (entry.type === "wave") {
+      s.phase = "wave";
+      s.rt = createRealtimeState();
+      s.activeWave = entry.wave;
+      for (const d of s.placed) d.cooldown = 0;
+      s.selectedPlaceable = null;
+      this.hud.hideBuild();
+    } else {
+      this.startBoss(entry.bossIndex);
+    }
+  }
+
+  private completeWave(): void {
+    const s = this.state;
+    if (s.activeWave) {
+      s.currency += s.activeWave.stipend;
+      s.score += s.activeWave.stipend * 0.4;
+    }
+    s.scheduleIndex++;
+    this.enterBuild();
+  }
+
+  // ---- boss flow (Phase 1 console, on the built layout) ------------------
+
+  private startBoss(bossIndex: 1 | 2): void {
+    const s = this.state;
+    const cfg = bossConfigFromLayout(s.placed, bossIndex);
+    const brain = bossIndex === 2 && s.brainUnlocked && !s.brainStaffDisabled;
     const session: BossSession = {
       cfg,
       brain,
@@ -91,87 +199,186 @@ export class Game {
       result: null,
       selectedThreatId: cfg.threats[0]?.id ?? null,
     };
-    this.state.phase = "boss";
-    this.state.boss = session;
-    this.screens.clear();
-    this.renderBoss();
+    this.currentBossIndex = bossIndex;
+    s.phase = "boss";
+    s.boss = session;
+    this.hud.clear();
+    this.console.render(session);
   }
 
   private afterBoss(): void {
-    const s = this.state.boss;
-    if (!s) return;
-    if (!s.brain && !this.state.brainUnlocked) {
-      // Boss #1 done → the unlock beat.
-      this.state.log.boss1 = s.result ?? undefined;
-      this.state.brainUnlocked = true;
-      this.state.phase = "unlock";
+    const s = this.state;
+    const session = s.boss;
+    if (!session) return;
+    // Boss performance feeds the score (clean assignments score higher).
+    if (session.result) {
+      s.score += session.result.stopped * 120;
+    }
+    if (this.currentBossIndex === 1) {
+      s.log.boss1 = session.result ?? undefined;
+      s.phase = "unlock";
       this.console.clear();
       this.screens.unlock();
     } else {
-      // Boss #2 done → summary.
-      this.state.log.boss2 = s.result ?? undefined;
-      this.state.phase = "summary";
+      s.log.boss2 = session.result ?? undefined;
       this.console.clear();
-      this.screens.summary(this.summaryLine(this.state.log.boss1), this.summaryLine(this.state.log.boss2));
+      s.scheduleIndex++;
+      this.enterBuild();
     }
   }
 
-  private summaryLine(r?: { stopped: number; results: { length: number } } | undefined): string {
-    if (!r) return "—";
-    return `${r.stopped} / ${r.results.length} stopped`;
+  private afterUnlock(): void {
+    const s = this.state;
+    s.brainUnlocked = true;
+    this.screens.clear();
+    s.scheduleIndex++;
+    this.enterBuild();
+  }
+
+  private endRun(victory: boolean): void {
+    const s = this.state;
+    s.victory = victory;
+    s.phase = "summary";
+    s.rt = null;
+    this.console.clear();
+    this.hud.clear();
+    this.world.setGhost(null);
+    this.screens.summary({
+      victory,
+      score: s.score,
+      boss1: s.log.boss1 ? `${s.log.boss1.stopped}/${s.log.boss1.results.length}` : "—",
+      boss2: s.log.boss2 ? `${s.log.boss2.stopped}/${s.log.boss2.results.length}` : "—",
+    });
   }
 
   private restart(): void {
     const staffDisabled = this.state.brainStaffDisabled;
     this.state = createInitialState(LEVEL_1);
     this.state.brainStaffDisabled = staffDisabled;
+    this.currentBossIndex = null;
+    this.world.setGhost(null);
     this.world.drawStatic(this.state);
     this.goTitle();
   }
 
-  // ---- boss interactions -------------------------------------------------
+  // ---- build input (place / sell on the hex field) -----------------------
+
+  private selectPlaceable(id: string): void {
+    this.state.selectedPlaceable = this.state.selectedPlaceable === id ? null : id;
+    this.hud.showBuild(this.state, this.nextEntryLabel());
+  }
+
+  private installInput(): void {
+    const canvas = this.world.app.canvas;
+    const toHex = (e: PointerEvent): Hex => {
+      const rect = canvas.getBoundingClientRect();
+      return this.world.screenToHex(e.clientX - rect.left, e.clientY - rect.top);
+    };
+    canvas.addEventListener("pointerdown", (e) => {
+      if (this.state.phase !== "build") return;
+      this.handleFieldTap(toHex(e as PointerEvent));
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (this.state.phase !== "build") return;
+      this.pointerHex = toHex(e as PointerEvent);
+      this.updateGhost();
+    });
+    canvas.addEventListener("pointerleave", () => {
+      this.pointerHex = null;
+      this.world.setGhost(null);
+    });
+  }
+
+  private handleFieldTap(hex: Hex): void {
+    const s = this.state;
+    const occupant = s.placed.find((d) => hexKey(d.hex) === hexKey(hex));
+    if (occupant) {
+      this.sell(occupant.id);
+      return;
+    }
+    if (!s.selectedPlaceable) return;
+    if (!this.isPlaceable(hex)) return;
+    const p = placeableById(s.selectedPlaceable);
+    if (!p || s.currency < p.cost) return;
+    s.currency -= p.cost;
+    s.placed.push(makePlaced(p.id, hex));
+    // Deselect if the next one is no longer affordable, else keep placing.
+    if (s.currency < p.cost) s.selectedPlaceable = null;
+    this.hud.showBuild(s, this.nextEntryLabel());
+    this.updateGhost();
+  }
+
+  private sell(deviceId: string): void {
+    const s = this.state;
+    const idx = s.placed.findIndex((d) => d.id === deviceId);
+    if (idx < 0) return;
+    const dev = s.placed[idx];
+    const p = placeableById(dev.placeableId);
+    if (p) s.currency += Math.floor(p.cost * SELL_REFUND);
+    s.placed.splice(idx, 1);
+    this.hud.showBuild(s, this.nextEntryLabel());
+  }
+
+  private isPlaceable(hex: Hex): boolean {
+    const s = this.state;
+    if (ringDistance(hex) === 0) return false; // centre is the asset
+    if (ringDistance(hex) > s.level.rings) return false; // off-field
+    return !s.placed.some((d) => hexKey(d.hex) === hexKey(hex));
+  }
+
+  private updateGhost(): void {
+    const s = this.state;
+    if (s.phase !== "build" || !s.selectedPlaceable || !this.pointerHex) {
+      this.world.setGhost(null);
+      return;
+    }
+    const p = placeableById(s.selectedPlaceable);
+    if (!p) return;
+    const occupied = s.placed.some((d) => hexKey(d.hex) === hexKey(this.pointerHex!));
+    this.world.setGhost({
+      placeableId: p.id,
+      hex: this.pointerHex,
+      radius: p.radius,
+      kind: p.kind,
+      valid: this.isPlaceable(this.pointerHex) && !occupied && s.currency >= p.cost,
+    });
+  }
+
+  // ---- boss interactions (delegate to the session) -----------------------
 
   private renderBoss(): void {
     if (this.state.boss) this.console.render(this.state.boss);
   }
 
-  private selectThreat(id: string): void {
+  private bossSelectThreat(id: string): void {
     if (!this.state.boss) return;
     this.state.boss.selectedThreatId = this.state.boss.selectedThreatId === id ? null : id;
     this.renderBoss();
   }
 
-  private assign(kind: "sensor" | "effector", deviceId: string): void {
+  private bossAssign(kind: "sensor" | "effector", deviceId: string): void {
     const s = this.state.boss;
     if (!s || !s.selectedThreatId) return;
     const sel = s.selectedThreatId;
     const cur = s.map[sel];
     const field = kind === "sensor" ? "sensorId" : "effectorId";
-
     if (cur[field] === deviceId) {
-      // Toggle off.
       cur[field] = null;
     } else {
-      // Enforce one device → one threat: strip it from anyone else first.
-      for (const t of s.cfg.threats) {
-        if (s.map[t.id][field] === deviceId) s.map[t.id][field] = null;
-      }
+      for (const t of s.cfg.threats) if (s.map[t.id][field] === deviceId) s.map[t.id][field] = null;
       cur[field] = deviceId;
     }
     this.renderBoss();
   }
 
-  private applyOptimal(): void {
+  private bossApplyOptimal(): void {
     const s = this.state.boss;
     if (!s || !s.optimal) return;
-    // Deep copy the optimal into the working map.
-    for (const t of s.cfg.threats) {
-      s.map[t.id] = { ...s.optimal[t.id] };
-    }
+    for (const t of s.cfg.threats) s.map[t.id] = { ...s.optimal[t.id] };
     this.renderBoss();
   }
 
-  private engage(): void {
+  private bossEngage(): void {
     const s = this.state.boss;
     if (!s || s.result) return;
     s.result = resolveEncounter(s.cfg, s.map, this.rng);
@@ -180,17 +387,12 @@ export class Game {
 
   // ---- staff sales toggle (spec §6.2) ------------------------------------
 
-  /**
-   * Hidden booth-staff control: press "B" to toggle the brain off/on so a rep
-   * can show the same hardware with and without coordination. Not part of the
-   * normal player flow. Re-renders the current boss if one is active.
-   */
   private installStaffToggle(): void {
     window.addEventListener("keydown", (e) => {
       if (e.key.toLowerCase() !== "b") return;
       this.state.brainStaffDisabled = !this.state.brainStaffDisabled;
       const s = this.state.boss;
-      if (s && this.state.brainUnlocked && !s.result) {
+      if (s && this.state.brainUnlocked && !s.result && this.currentBossIndex === 2) {
         s.brain = !this.state.brainStaffDisabled;
         s.optimal = s.brain ? computeOptimal(s.cfg) : null;
         this.renderBoss();

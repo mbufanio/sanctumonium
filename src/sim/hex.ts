@@ -64,11 +64,36 @@ export function hexDistance(a: Hex, b: Hex): number {
   return hexLength({ q: a.q - b.q, r: a.r - b.r });
 }
 
+/**
+ * Flat-top axial hex → PLANE coordinates (no iso squash). The simulation runs
+ * in plane space so device ranges are true circles; the renderer applies the
+ * squash at draw time (see planeToPixel). Origin maps to (0,0).
+ */
+export function hexToPlane(h: Hex): Px {
+  return {
+    x: HEX_SIZE * (1.5 * h.q),
+    y: HEX_SIZE * (SQRT3 * (h.r + h.q / 2)),
+  };
+}
+
+/** Apply the iso squash to plane coords → screen-space pixels. */
+export function planeToPixel(p: Px): Px {
+  return { x: p.x, y: p.y * ISO_SQUASH };
+}
+
 /** Flat-top axial hex → pixel (with iso squash). Origin maps to (0,0). */
 export function hexToPixel(h: Hex): Px {
-  const x = HEX_SIZE * (1.5 * h.q);
-  const y = HEX_SIZE * (SQRT3 * (h.r + h.q / 2)) * ISO_SQUASH;
-  return { x, y };
+  return planeToPixel(hexToPlane(h));
+}
+
+/** Euclidean distance between two plane points. */
+export function planeDist(a: Px, b: Px): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** Length of a plane vector. */
+export function planeLen(p: Px): number {
+  return Math.hypot(p.x, p.y);
 }
 
 /** Pixel → nearest hex (inverse of hexToPixel), for input hit-testing. */
