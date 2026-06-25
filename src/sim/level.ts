@@ -28,6 +28,6 @@ export interface LevelDef {
 export const LEVEL_1: LevelDef = {
   id: "mil-facility",
   name: "Forward Operating Base",
-  rings: 6,
+  rings: 9,
   asset: { id: "command", name: "Command Post", pos: { q: 0, r: 0 }, radius: 1 },
 };

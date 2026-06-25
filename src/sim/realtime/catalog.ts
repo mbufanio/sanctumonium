@@ -98,8 +98,9 @@ export interface DroneSpec {
   leakDamage: number;
 }
 
+// Speeds are scaled to the larger field so wave pacing stays brisk (~15s).
 export const DRONE_SPECS: Record<ThreatTypeId, DroneSpec> = {
-  "rf-quad": { typeId: "rf-quad", name: THREAT_TYPES["rf-quad"].name, speed: 26, hp: 1, bounty: 12, leakDamage: 10 },
-  autonomy: { typeId: "autonomy", name: THREAT_TYPES.autonomy.name, speed: 30, hp: 1, bounty: 18, leakDamage: 14 },
-  "low-observable": { typeId: "low-observable", name: THREAT_TYPES["low-observable"].name, speed: 22, hp: 1, bounty: 20, leakDamage: 12 },
+  "rf-quad": { typeId: "rf-quad", name: THREAT_TYPES["rf-quad"].name, speed: 42, hp: 1, bounty: 12, leakDamage: 10 },
+  autonomy: { typeId: "autonomy", name: THREAT_TYPES.autonomy.name, speed: 48, hp: 1, bounty: 18, leakDamage: 14 },
+  "low-observable": { typeId: "low-observable", name: THREAT_TYPES["low-observable"].name, speed: 36, hp: 1, bounty: 20, leakDamage: 12 },
 };

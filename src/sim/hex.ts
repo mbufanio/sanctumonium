@@ -22,7 +22,7 @@ export interface Px {
 }
 
 /** Center-to-corner distance of a hex in pixels, before the iso squash. */
-export const HEX_SIZE = 34;
+export const HEX_SIZE = 38;
 
 /** Vertical compression applied to screen-Y for the 2.5D isometric look. */
 export const ISO_SQUASH = 0.62;
@@ -114,7 +114,8 @@ export function hexRound(h: Hex): Hex {
   if (dx > dy && dx > dz) rx = -ry - rz;
   else if (dy > dz) ry = -rx - rz;
   else rz = -rx - ry;
-  return { q: rx, r: rz };
+  // Normalize negative zero (Math.round can yield -0) so equality is clean.
+  return { q: rx + 0, r: rz + 0 };
 }
 
 /** All hexes within `radius` rings of the origin (a hexagon-shaped field). */
