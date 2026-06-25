@@ -7,7 +7,7 @@ real branding, product names, model numbers, or performance figures. See
 [`CUAS_TRADESHOW_GAME_SPEC.md`](./CUAS_TRADESHOW_GAME_SPEC.md) for the full
 design intent — it is the source of truth.
 
-## Status — Phases 0–5
+## Status — Phases 0–6
 
 The build is sequenced so the slice proving the value proposition ships first
 (spec §14). Implemented so far:
@@ -93,6 +93,21 @@ brain unlock → Boss #2 (clean win) → side-by-side summary + conversion hando
   - **Live attract board** (`?display=board`, or press **L** at the title): a
     full-screen, auto-refreshing second-screen display.
 
+- **Phase 6 — Additional sites.** Levels are pure data over the one engine
+  (`src/sim/level.ts`): a hex field, a centred asset, a starting budget,
+  integrity, a per-level wave schedule, and "wrinkle" flags. A **site-select
+  screen** opens the run; each site keeps its own leaderboard. Four sites, each
+  teaching a different reason coordination matters:
+  - **Forward Operating Base** — balanced teacher (the lead).
+  - **International Airport** — *operational shutdown*: every leak also tanks
+    your score; you can't tolerate intrusions.
+  - **Power Substation** — fragile high-value asset, autonomy/fiber-controlled
+    drones that shrug off jammers; you can't jam your way out.
+  - **Stadium · Event Day** — *swarms*: dozens of fast, cheap micro-drones at
+    once, where area weapons (HPM/plasma/beam) shine.
+  Wrinkles are expressed via the threat MIX and per-spawn modifiers
+  (speed/bounty/leak/size) plus small level flags — no new threat types.
+
 ### The teaching matchups (spec §6)
 
 Odds depend on three *legible* factors — effector-vs-threat-type, whether the
@@ -148,7 +163,7 @@ src/
   sim/                 # pure TypeScript — no Pixi, deterministic
     rng.ts             # seedable PRNG (fair, reproducible scoring)
     hex.ts             # hexagonal grid math (axial coords, asset-centred 360°)
-    level.ts           # site/level data (Level 1 = military facility)
+    level.ts           # the four sites as data (field, asset, budget, schedule, wrinkle)
     state.ts           # the single authoritative game-state + phase machine
     boss/
       types.ts         # boss-minigame domain types
@@ -192,8 +207,6 @@ recommendations (Phase 3).
 
 ## Not yet built
 
-Phases 6–7: additional sites (airport / energy / stadium, each with a new
-threat wrinkle — swarms, low-RCS, autonomy, fiber-controlled), and booth
-hardening (attract/idle auto-demo, auto-reset between players, kiosk fullscreen
-lock, a performance pass for the heavy finale, and a colorblind/touch-target
-audit). See the spec for the full plan.
+Phase 7 — booth hardening: attract/idle auto-demo, auto-reset between players,
+kiosk fullscreen lock, a polished staff panel, a performance pass for the heavy
+finale, and a colorblind / touch-target audit. See the spec for the full plan.

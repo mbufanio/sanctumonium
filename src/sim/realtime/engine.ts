@@ -16,7 +16,7 @@ import { Rng } from "../rng.ts";
 import { planeDist, planeLen, type Px } from "../hex.ts";
 import type { ThreatTypeId } from "../boss/types.ts";
 import { DRONE_SPECS, LEAK_RADIUS } from "./catalog.ts";
-import type { Drone, PlacedDevice, RealtimeState, WaveDef } from "./types.ts";
+import type { Drone, PlacedDevice, RealtimeState, SpawnEntry, WaveDef } from "./types.ts";
 
 /**
  * Effectiveness multiplier when firing on an untracked drone. Deliberately
@@ -74,7 +74,7 @@ export function stepWave(
   // 1. Spawn any drones whose scheduled time has arrived.
   while (rt.spawnCursor < wave.spawns.length && wave.spawns[rt.spawnCursor].at <= rt.time) {
     const s = wave.spawns[rt.spawnCursor++];
-    rt.drones.push(spawnDrone(rt, s.typeId, s.bearing, env.spawnRadius));
+    rt.drones.push(spawnDrone(rt, s, env.spawnRadius));
   }
 
   const sensors = placed.filter((p) => p.kind === "sensor");
@@ -201,18 +201,20 @@ export function hitChance(effectBase: number, tracked: boolean): number {
   return effectBase * (tracked ? 1 : UNTRACKED_PENALTY);
 }
 
-function spawnDrone(rt: RealtimeState, typeId: ThreatTypeId, bearing: number, spawnRadius: number): Drone {
-  const spec = DRONE_SPECS[typeId];
-  const rad = ((bearing - 90) * Math.PI) / 180; // 0° = north (up), matches boss polar
+function spawnDrone(rt: RealtimeState, s: SpawnEntry, spawnRadius: number): Drone {
+  const spec = DRONE_SPECS[s.typeId];
+  const m = s.mods ?? {};
+  const rad = ((s.bearing - 90) * Math.PI) / 180; // 0° = north (up), matches boss polar
   return {
     id: rt.nextDroneId++,
-    typeId,
+    typeId: s.typeId,
     pos: { x: Math.cos(rad) * spawnRadius, y: Math.sin(rad) * spawnRadius },
-    speed: spec.speed,
+    speed: spec.speed * (m.speedMul ?? 1),
     hp: spec.hp,
-    bounty: spec.bounty,
-    leakDamage: spec.leakDamage,
+    bounty: Math.round(spec.bounty * (m.bountyMul ?? 1)),
+    leakDamage: spec.leakDamage * (m.leakMul ?? 1),
     state: "alive",
     tracked: false,
+    size: m.size ?? 1,
   };
 }

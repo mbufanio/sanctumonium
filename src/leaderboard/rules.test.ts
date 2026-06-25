@@ -54,7 +54,7 @@ describe("submission validation & anti-abuse", () => {
     expect(r.clean?.handle).toBe("PILOT");
   });
   it("rejects an implausible (cheated) score", () => {
-    const r = validateSubmission(sub({ score: maxPlausibleScore() + 1 }));
+    const r = validateSubmission(sub({ score: maxPlausibleScore("mil-facility") + 1 }));
     expect(r.ok).toBe(false);
     expect(r.reason).toMatch(/implausible/);
   });

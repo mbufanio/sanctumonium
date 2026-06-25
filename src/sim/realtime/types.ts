@@ -46,6 +46,8 @@ export interface Drone {
   state: DroneState;
   /** True while at least one capable, in-range sensor is tracking it. */
   tracked: boolean;
+  /** Visual scale (1 = normal; smaller for swarm drones). */
+  size: number;
 }
 
 /** Transient visual events produced by a sim step (consumed by the renderer). */
@@ -58,11 +60,24 @@ export type Fx =
   // Area effector blast (HPM / plasma / beam): a ring expanding at `at`.
   | { kind: "aoe"; at: Px; radius: number; effector: string };
 
+/**
+ * Per-spawn stat modifiers — how a level expresses its threat "wrinkle" without
+ * inventing new threat types (a swarm is just fast/cheap/small RF quads, etc.).
+ */
+export interface SpawnMods {
+  speedMul?: number;
+  bountyMul?: number;
+  leakMul?: number;
+  /** Visual scale (1 = normal; <1 for swarm micro-drones). */
+  size?: number;
+}
+
 /** A queued spawn: emit a drone of `typeId` at sim time `at`, bearing `bearing`. */
 export interface SpawnEntry {
   at: number;
   typeId: ThreatTypeId;
   bearing: number;
+  mods?: SpawnMods;
 }
 
 export type WaveKind = "normal" | "boss";

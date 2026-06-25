@@ -12,7 +12,7 @@
 import { Application } from "pixi.js";
 import { Rng, timeSeed } from "./sim/rng.ts";
 import { ringDistance, hexKey, type Hex } from "./sim/hex.ts";
-import { LEVEL_1 } from "./sim/level.ts";
+import { LEVEL_1, LEVELS, type LevelDef } from "./sim/level.ts";
 import {
   createInitialState,
   makePlaced,
@@ -23,7 +23,7 @@ import {
 import { placeableById, nextUpgrade, TRACKED_KILL_BONUS } from "./sim/realtime/catalog.ts";
 import { createRealtimeState } from "./sim/realtime/types.ts";
 import { stepWave } from "./sim/realtime/engine.ts";
-import { SCHEDULE, bossConfigFromLayout, tierForScheduleIndex } from "./sim/realtime/schedule.ts";
+import { bossConfigFromLayout, tierForBosses } from "./sim/realtime/schedule.ts";
 import { adaptWave, recommendPlacement, type Recommendation } from "./sim/realtime/adaptive.ts";
 import { computeOptimal, emptyAssignment, resolveEncounter } from "./sim/boss/engine.ts";
 import { WorldRenderer } from "./render/world.ts";
@@ -131,6 +131,8 @@ export class Game {
     for (const lk of res.leaks) {
       s.integrity -= lk.damage;
       s.leaked++;
+      // Airport wrinkle (spec §9): a leak also disrupts operations → score hit.
+      s.score = Math.max(0, s.score - s.level.leakScorePenalty);
     }
     if (s.integrity <= 0) {
       s.integrity = 0;
@@ -152,7 +154,24 @@ export class Game {
     this.screens.title();
   }
 
+  /** Title "Begin" → choose a site (spec §9 — sites are the progression). */
   private startRun(): void {
+    this.showLevelSelect();
+  }
+
+  private showLevelSelect(): void {
+    this.console.clear();
+    this.hud.clear();
+    this.leaderboard.clear();
+    this.screens.levelSelect(LEVELS, (lvl) => this.startRunOnLevel(lvl));
+  }
+
+  private startRunOnLevel(level: LevelDef): void {
+    const staffDisabled = this.state.brainStaffDisabled;
+    this.state = createInitialState(level);
+    this.state.brainStaffDisabled = staffDisabled;
+    this.currentBossIndex = null;
+    this.world.drawStatic(this.state);
     this.screens.clear();
     this.enterBuild();
   }
@@ -164,13 +183,13 @@ export class Game {
     s.rt = null;
     s.activeWave = null;
     this.console.clear();
-    if (s.scheduleIndex >= SCHEDULE.length) {
+    if (s.scheduleIndex >= s.level.schedule.length) {
       this.endRun(true);
       return;
     }
     this.recDismissed = false;
     s.selectedDeviceId = null;
-    s.maxTier = tierForScheduleIndex(s.scheduleIndex);
+    s.maxTier = tierForBosses(s.bossesBeaten);
     this.refreshBuildDock();
   }
 
@@ -186,7 +205,7 @@ export class Game {
   }
 
   private nextEntryLabel(): string {
-    const entry = SCHEDULE[this.state.scheduleIndex];
+    const entry = this.state.level.schedule[this.state.scheduleIndex];
     if (!entry) return "Finish";
     if (entry.type === "boss") return `⚠ Boss attack — Step ${this.state.scheduleIndex + 1}`;
     return `Start ${entry.wave.label}`;
@@ -195,7 +214,7 @@ export class Game {
   /** Player pressed "start" in the build dock → run the next schedule entry. */
   private startScheduleEntry(): void {
     const s = this.state;
-    const entry = SCHEDULE[s.scheduleIndex];
+    const entry = s.level.schedule[s.scheduleIndex];
     if (!entry) {
       this.endRun(true);
       return;
@@ -255,6 +274,7 @@ export class Game {
     if (session.result) {
       s.score += session.result.stopped * 120;
     }
+    s.bossesBeaten++;
     if (this.currentBossIndex === 1) {
       s.log.boss1 = session.result ?? undefined;
       s.phase = "unlock";
@@ -299,14 +319,10 @@ export class Game {
     this.leaderboard.showSubmit(stats);
   }
 
+  /** "Play again" → back to site select (replayability, spec §9). */
   private restart(): void {
-    const staffDisabled = this.state.brainStaffDisabled;
-    this.state = createInitialState(LEVEL_1);
-    this.state.brainStaffDisabled = staffDisabled;
-    this.currentBossIndex = null;
     this.world.setGhost(null);
-    this.world.drawStatic(this.state);
-    this.goTitle();
+    this.showLevelSelect();
   }
 
   // ---- build input (place / sell on the hex field) -----------------------

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { computeOptimal, resolveEncounter } from "../boss/engine.ts";
 import { Rng } from "../rng.ts";
 import { makePlaced } from "../state.ts";
-import { SCHEDULE, bossConfigFromLayout } from "./schedule.ts";
+import { bossConfigFromLayout } from "./schedule.ts";
+import { LEVEL_1 } from "../level.ts";
 import type { PlacedDevice } from "./types.ts";
+
+const SCHEDULE = LEVEL_1.schedule;
 
 function dev(_kind: "sensor" | "effector", placeableId: string, q: number, r: number): PlacedDevice {
   return makePlaced(placeableId, { q, r });

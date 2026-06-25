@@ -15,28 +15,32 @@ import { BOSS_1, BOSS_2 } from "../boss/data.ts";
 import { BOSS_KNOWN } from "./catalog.ts";
 import type { BossConfig, DeviceUnit, EffectorTypeId, SensorTypeId } from "../boss/types.ts";
 import type { ThreatTypeId } from "../boss/types.ts";
-import type { PlacedDevice, SpawnEntry, WaveDef } from "./types.ts";
+import type { PlacedDevice, SpawnEntry, SpawnMods, WaveDef } from "./types.ts";
 
-interface Composition {
+export interface Composition {
   typeId: ThreatTypeId;
   count: number;
+  /** Per-spawn modifiers — how a level expresses its wrinkle (swarm, etc.). */
+  mods?: SpawnMods;
 }
 
 /** Build a normal wave: spread spawns over time and around all 360°. */
-function makeWave(index: number, comps: Composition[], stipend: number): WaveDef {
+export function makeWave(index: number, comps: Composition[], stipend: number, label?: string): WaveDef {
   const spawns: SpawnEntry[] = [];
   let n = 0;
   const total = comps.reduce((a, c) => a + c.count, 0);
-  const gap = 0.8; // seconds between spawns
+  // Swarms spawn faster (tighter gap) so they read as a rush, not a trickle.
+  const swarmy = comps.some((c) => (c.mods?.size ?? 1) < 0.8);
+  const gap = swarmy ? 0.35 : 0.8;
   for (const c of comps) {
     for (let i = 0; i < c.count; i++) {
       // Even spread around the circle, offset per wave so it isn't static.
       const bearing = (360 / total) * n + index * 47;
-      spawns.push({ at: 0.6 + n * gap, typeId: c.typeId, bearing: bearing % 360 });
+      spawns.push({ at: 0.6 + n * gap, typeId: c.typeId, bearing: bearing % 360, mods: c.mods });
       n++;
     }
   }
-  return { index, kind: "normal", label: `Wave ${index}`, spawns, stipend };
+  return { index, kind: "normal", label: label ?? `Wave ${index}`, spawns, stipend };
 }
 
 /** One schedule entry: a real-time wave or a boss fight on the built layout. */
@@ -44,33 +48,9 @@ export type ScheduleEntry =
   | { type: "wave"; wave: WaveDef }
   | { type: "boss"; bossIndex: 1 | 2 };
 
-/**
- * The Phase-2 run schedule. ~5 normal waves + 2 bosses. Difficulty and the
- * threat mix climb; the autonomy drone (jammer-immune) and the low-observable
- * (radar-shy) show up after boss #1 so the player feels their coverage gaps.
- */
-export const SCHEDULE: ScheduleEntry[] = [
-  { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 4 }], 60) },
-  { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 6 }], 75) },
-  { type: "boss", bossIndex: 1 },
-  { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 5 }, { typeId: "low-observable", count: 2 }], 90) },
-  { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 2 }], 105) },
-  { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 2 }], 120) },
-  { type: "boss", bossIndex: 2 },
-  { type: "wave", wave: makeWave(6, [{ typeId: "rf-quad", count: 8 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 3 }], 140) },
-  { type: "wave", wave: makeWave(7, [{ typeId: "rf-quad", count: 9 }, { typeId: "autonomy", count: 4 }, { typeId: "low-observable", count: 4 }], 160) },
-  // Escalation finale (spec §7) — the swarm scales up until it overwhelms you.
-  { type: "wave", wave: makeWave(8, [{ typeId: "rf-quad", count: 13 }, { typeId: "autonomy", count: 6 }, { typeId: "low-observable", count: 6 }], 220) },
-  { type: "wave", wave: makeWave(9, [{ typeId: "rf-quad", count: 22 }, { typeId: "autonomy", count: 12 }, { typeId: "low-observable", count: 10 }], 320) },
-];
-
-/** Tier that should be unlocked by the time the player reaches a schedule step.
- *  Tier 2 opens after boss #1 (the unlock), tier 3 after boss #2 (the catharsis). */
-export function tierForScheduleIndex(index: number): 1 | 2 | 3 {
-  // Indices: 0,1 = waves; 2 = boss1; 3,4,5 = waves; 6 = boss2; 7,8 = finale.
-  if (index >= 7) return 3; // after boss #2
-  if (index >= 3) return 2; // after boss #1
-  return 1;
+/** Tier unlocked given how many bosses the player has beaten (spec §7 climb). */
+export function tierForBosses(bossesBeaten: number): 1 | 2 | 3 {
+  return bossesBeaten >= 2 ? 3 : bossesBeaten >= 1 ? 2 : 1;
 }
 
 /** Bearing (deg, 0 = north) of a placed device's hex around the centre. */

@@ -16,8 +16,10 @@ import { makePlaced } from "../state.ts";
 import { placeableById, TRACKED_KILL_BONUS } from "./catalog.ts";
 import { createRealtimeState, type PlacedDevice } from "./types.ts";
 import { stepWave } from "./engine.ts";
-import { SCHEDULE, bossConfigFromLayout } from "./schedule.ts";
+import { bossConfigFromLayout } from "./schedule.ts";
 import { adaptWave } from "./adaptive.ts";
+
+const SCHEDULE = LEVEL_1.schedule;
 import { computeOptimal, emptyAssignment } from "../boss/engine.ts";
 import { resolveEncounter } from "../boss/engine.ts";
 import type { AssignmentMap, BossConfig } from "../boss/types.ts";

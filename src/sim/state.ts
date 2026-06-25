@@ -54,6 +54,8 @@ export interface GameState {
 
   /** Highest device tier currently unlocked in the palette (spec §7 climb). */
   maxTier: Tier;
+  /** Bosses beaten this run (drives the tech-tier unlocks). */
+  bossesBeaten: number;
 
   // Schedule / waves.
   scheduleIndex: number;
@@ -120,15 +122,16 @@ export function createInitialState(level: LevelDef): GameState {
     time: 0,
     placed,
     nextDeviceId: placed.length,
-    currency: 120,
+    currency: level.startBudget,
     score: 0,
-    integrity: 100,
-    maxIntegrity: 100,
+    integrity: level.integrity,
+    maxIntegrity: level.integrity,
     kills: 0,
     leaked: 0,
     wavesSurvived: 0,
     spent: 0,
     maxTier: 1,
+    bossesBeaten: 0,
     scheduleIndex: 0,
     rt: null,
     activeWave: null,

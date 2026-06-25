@@ -224,10 +224,11 @@ export class WorldRenderer {
     if (!rt) return;
     for (const d of rt.drones) {
       const s = planeToPixel(d.pos);
+      const sz = 6 * d.size; // swarm micro-drones are smaller
       // Tracked drones get a cyan lock ring (brain accent reserved for boss;
       // here a neutral track ring in coverage teal).
-      if (d.tracked) this.dronesGfx.circle(s.x, s.y, 9).stroke({ color: COLORS.coverage, width: 1, alpha: 0.7 });
-      this.triangle(this.dronesGfx, s.x, s.y, 6, COLORS.threatDeep, COLORS.threat);
+      if (d.tracked) this.dronesGfx.circle(s.x, s.y, sz + 3).stroke({ color: COLORS.coverage, width: 1, alpha: 0.7 });
+      this.triangle(this.dronesGfx, s.x, s.y, sz, COLORS.threatDeep, COLORS.threat);
     }
   }
 

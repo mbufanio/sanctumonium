@@ -1,10 +1,15 @@
 /**
- * Level / site definitions (spec §9). Levels are DATA over one engine so new
- * sites are cheap. Phase 0/1 ships Level 1 — the military facility — as the
- * lead. Revised architecture: the defended asset sits at the CENTER of a
- * hexagonal field and play happens 360° around it.
+ * Sites / levels (spec §9). Levels are DATA over one engine, so new sites are
+ * cheap: a hex field, a centred asset, a starting budget, a per-level wave
+ * schedule, and a "wrinkle" that teaches a different reason coordination
+ * matters. Each level keeps its own leaderboard (board filters by id).
+ *
+ * Wrinkles are expressed through the threat MIX and small per-spawn modifiers
+ * (a swarm is fast/cheap/small RF quads; jammer-immune pressure is autonomy-
+ * heavy) plus a couple of level flags — no new threat types required.
  */
 import type { Hex } from "./hex.ts";
+import { makeWave, type ScheduleEntry } from "./realtime/schedule.ts";
 
 export interface AssetDef {
   id: string;
@@ -18,16 +23,135 @@ export interface AssetDef {
 export interface LevelDef {
   id: string;
   name: string;
+  /** One-line scenario framing for the level-select screen. */
+  blurb: string;
+  /** The teaching wrinkle, shown to the player (spec §9). */
+  wrinkle: string;
   /** Number of hex rings from the centre to the field edge. */
   rings: number;
-  /** The single centred asset to defend (spec: asset in the middle, 360°). */
   asset: AssetDef;
+  /** Starting currency (spec §8 — start poor). */
+  startBudget: number;
+  /** Starting asset integrity (energy facilities are more fragile). */
+  integrity: number;
+  /** Spec §9 airport wrinkle: a leak also costs score (operations disrupted). */
+  leakScorePenalty: number;
+  /** This site's run schedule (normal waves + the two boss fights). */
+  schedule: ScheduleEntry[];
 }
 
-/** Level 1 — Military facility (BUILD FIRST, the lead — spec §9). */
-export const LEVEL_1: LevelDef = {
+const BOSS_1: ScheduleEntry = { type: "boss", bossIndex: 1 };
+const BOSS_2: ScheduleEntry = { type: "boss", bossIndex: 2 };
+
+/** Level 1 — Military facility (the lead; balanced teacher). */
+const MILITARY: LevelDef = {
   id: "mil-facility",
   name: "Forward Operating Base",
+  blurb: "Clear perimeter, obvious approach corridors. The clean teacher.",
+  wrinkle: "Balanced threats — learn the matchups and that geometry beats spend.",
   rings: 9,
   asset: { id: "command", name: "Command Post", pos: { q: 0, r: 0 }, radius: 1 },
+  startBudget: 120,
+  integrity: 100,
+  leakScorePenalty: 0,
+  schedule: [
+    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 4 }], 60) },
+    { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 6 }], 75) },
+    BOSS_1,
+    { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 5 }, { typeId: "low-observable", count: 2 }], 90) },
+    { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 2 }], 105) },
+    { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 2 }], 120) },
+    BOSS_2,
+    { type: "wave", wave: makeWave(6, [{ typeId: "rf-quad", count: 8 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 3 }], 140) },
+    { type: "wave", wave: makeWave(7, [{ typeId: "rf-quad", count: 9 }, { typeId: "autonomy", count: 4 }, { typeId: "low-observable", count: 4 }], 160) },
+    { type: "wave", wave: makeWave(8, [{ typeId: "rf-quad", count: 13 }, { typeId: "autonomy", count: 6 }, { typeId: "low-observable", count: 6 }], 220) },
+    { type: "wave", wave: makeWave(9, [{ typeId: "rf-quad", count: 22 }, { typeId: "autonomy", count: 12 }, { typeId: "low-observable", count: 10 }], 320, "FINAL WAVE") },
+  ],
 };
+
+/** Level 2 — Airport. Operational-shutdown angle: every leak disrupts ops. */
+const AIRPORT: LevelDef = {
+  id: "airport",
+  name: "International Airport",
+  blurb: "Live airfield. A single intrusion shuts down operations — leaks cost you.",
+  wrinkle: "Every leak also tanks your score — operations can't tolerate intrusions.",
+  rings: 10,
+  asset: { id: "tower", name: "Control Tower", pos: { q: 0, r: 0 }, radius: 1 },
+  startBudget: 140,
+  integrity: 100,
+  leakScorePenalty: 140,
+  schedule: [
+    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 5 }], 70) },
+    { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 5 }, { typeId: "low-observable", count: 2 }], 90) },
+    BOSS_1,
+    { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 6 }, { typeId: "low-observable", count: 3 }], 105) },
+    { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 2 }], 120) },
+    { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 7 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 3 }], 140) },
+    BOSS_2,
+    { type: "wave", wave: makeWave(6, [{ typeId: "rf-quad", count: 9 }, { typeId: "autonomy", count: 4 }, { typeId: "low-observable", count: 4 }], 160) },
+    { type: "wave", wave: makeWave(7, [{ typeId: "rf-quad", count: 11 }, { typeId: "autonomy", count: 5 }, { typeId: "low-observable", count: 5 }], 200) },
+    { type: "wave", wave: makeWave(8, [{ typeId: "rf-quad", count: 16 }, { typeId: "autonomy", count: 8 }, { typeId: "low-observable", count: 8 }], 280, "FINAL WAVE") },
+  ],
+};
+
+/** Level 3 — Energy facility. High-value, fragile asset; jammer-immune pressure. */
+const ENERGY: LevelDef = {
+  id: "energy",
+  name: "Power Substation",
+  blurb: "A fragile high-value asset. Autonomy & fiber-controlled drones shrug off jammers.",
+  wrinkle: "Jammer-immune drones dominate — you can't jam your way out; track and kill.",
+  rings: 8,
+  asset: { id: "core", name: "Transformer Yard", pos: { q: 0, r: 0 }, radius: 1 },
+  startBudget: 150,
+  integrity: 70, // fragile high-value asset — every leak really hurts
+  leakScorePenalty: 0,
+  schedule: [
+    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 3 }, { typeId: "autonomy", count: 2 }], 70) },
+    { type: "wave", wave: makeWave(2, [{ typeId: "autonomy", count: 4 }, { typeId: "rf-quad", count: 2 }], 90) },
+    BOSS_1,
+    { type: "wave", wave: makeWave(3, [{ typeId: "autonomy", count: 5 }, { typeId: "low-observable", count: 2 }], 110) },
+    { type: "wave", wave: makeWave(4, [{ typeId: "autonomy", count: 6 }, { typeId: "rf-quad", count: 3 }], 130) },
+    { type: "wave", wave: makeWave(5, [{ typeId: "autonomy", count: 7 }, { typeId: "low-observable", count: 3 }], 150) },
+    BOSS_2,
+    { type: "wave", wave: makeWave(6, [{ typeId: "autonomy", count: 9 }, { typeId: "low-observable", count: 4 }, { typeId: "rf-quad", count: 4 }], 180) },
+    { type: "wave", wave: makeWave(7, [{ typeId: "autonomy", count: 13 }, { typeId: "low-observable", count: 6 }, { typeId: "rf-quad", count: 5 }], 220) },
+    { type: "wave", wave: makeWave(8, [{ typeId: "autonomy", count: 20 }, { typeId: "low-observable", count: 9 }, { typeId: "rf-quad", count: 8 }], 320, "FINAL WAVE") },
+  ],
+};
+
+/** Swarm modifier — fast, cheap, small commercial drones in big numbers. */
+const SWARM = { speedMul: 1.5, bountyMul: 0.45, leakMul: 0.55, size: 0.6 } as const;
+
+/** Level 4 — Stadium. Dense, crowd-protection; the SWARM wrinkle. */
+const STADIUM: LevelDef = {
+  id: "stadium",
+  name: "Stadium · Event Day",
+  blurb: "Packed venue. Cheap drone swarms flood the airspace — area weapons shine.",
+  wrinkle: "Swarms: dozens of fast, cheap drones at once. Single-shot can't keep up.",
+  rings: 10,
+  asset: { id: "field", name: "Center Field", pos: { q: 0, r: 0 }, radius: 1 },
+  startBudget: 160,
+  integrity: 100,
+  leakScorePenalty: 0,
+  schedule: [
+    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 8, mods: SWARM }], 70) },
+    { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 12, mods: SWARM }], 95) },
+    BOSS_1,
+    { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 14, mods: SWARM }, { typeId: "low-observable", count: 2 }], 115) },
+    { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 16, mods: SWARM }, { typeId: "autonomy", count: 2 }], 135) },
+    { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 20, mods: SWARM }, { typeId: "autonomy", count: 3 }], 160) },
+    BOSS_2,
+    { type: "wave", wave: makeWave(6, [{ typeId: "rf-quad", count: 26, mods: SWARM }, { typeId: "autonomy", count: 4 }], 190) },
+    { type: "wave", wave: makeWave(7, [{ typeId: "rf-quad", count: 34, mods: SWARM }, { typeId: "autonomy", count: 6 }], 230) },
+    { type: "wave", wave: makeWave(8, [{ typeId: "rf-quad", count: 50, mods: SWARM }, { typeId: "autonomy", count: 10 }, { typeId: "low-observable", count: 6 }], 340, "FINAL WAVE") },
+  ],
+};
+
+export const LEVELS: LevelDef[] = [MILITARY, AIRPORT, ENERGY, STADIUM];
+
+export function getLevel(id: string): LevelDef {
+  return LEVELS.find((l) => l.id === id) ?? MILITARY;
+}
+
+/** The default / lead level (built first, the booth's opener). */
+export const LEVEL_1 = MILITARY;

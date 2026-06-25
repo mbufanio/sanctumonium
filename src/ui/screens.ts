@@ -1,8 +1,10 @@
 /**
- * Full-screen narrative overlays (spec §2 emotional arc): the title, the brain
- * "call for help / unlock" beat, and the end summary. Kept deliberately spare
- * and large-type for a busy show floor (spec §3 readability rules).
+ * Full-screen narrative overlays (spec §2 emotional arc): the title, the site
+ * select, the brain "call for help / unlock" beat, and the end summary. Kept
+ * deliberately spare and large-type for a busy show floor (spec §3).
  */
+import type { LevelDef } from "../sim/level.ts";
+
 export interface ScreenCallbacks {
   onStart(): void;
   onUnlockContinue(): void;
@@ -37,6 +39,31 @@ export class Screens {
     const btn = button("Begin", "screen-cta");
     btn.onclick = () => this.cb.onStart();
     s.append(btn);
+    this.root.append(s);
+  }
+
+  /** Site select (spec §9) — pick a scenario; each teaches a different wrinkle. */
+  levelSelect(levels: LevelDef[], onPick: (level: LevelDef) => void): void {
+    this.clear();
+    const s = screen("levelselect-screen");
+    s.innerHTML = `
+      <div class="screen-kicker">SELECT A SITE</div>
+      <h1 class="screen-h1">Where are you defending?</h1>
+    `;
+    const grid = document.createElement("div");
+    grid.className = "site-grid";
+    for (const lvl of levels) {
+      const card = document.createElement("button");
+      card.className = "site-card";
+      card.innerHTML = `
+        <div class="site-name">${lvl.name}</div>
+        <div class="site-blurb">${lvl.blurb}</div>
+        <div class="site-wrinkle"><span class="wrinkle-tag">WRINKLE</span> ${lvl.wrinkle}</div>
+      `;
+      card.onclick = () => onPick(lvl);
+      grid.append(card);
+    }
+    s.append(grid);
     this.root.append(s);
   }
 

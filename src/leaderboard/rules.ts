@@ -6,7 +6,7 @@
  * affiliation list, and the server-side plausibility cap (max achievable score
  * for a level) used to reject junk. No I/O, no rendering.
  */
-import { SCHEDULE } from "../sim/realtime/schedule.ts";
+import { getLevel } from "../sim/level.ts";
 import { DRONE_SPECS, TRACKED_KILL_BONUS } from "../sim/realtime/catalog.ts";
 
 export type BoardKind = "alltime" | "today";
@@ -88,22 +88,24 @@ export function sanitizeAffiliation(raw: string): string {
 }
 
 /**
- * Theoretical maximum score for the standard run (every drone a tracked kill,
- * every stipend earned, both bosses cleared 4/4). Used as the anti-abuse cap.
- * Mirrors the scoring in the controller: bounty×TRACKED on kills, stipend×0.4
- * per wave, 120 per boss-threat stopped.
+ * Theoretical maximum score for a level's run (every drone a tracked kill,
+ * every stipend earned, both bosses cleared 4/4). The per-level anti-abuse cap.
+ * Mirrors the scoring in the controller: bounty×TRACKED on kills (with the
+ * spawn's bounty modifier), stipend×0.4 per wave, 120 per boss-threat stopped.
  */
-export function maxPlausibleScore(): number {
+export function maxPlausibleScore(levelId: string): number {
   let max = 0;
-  for (const entry of SCHEDULE) {
+  for (const entry of getLevel(levelId).schedule) {
     if (entry.type === "wave") {
-      for (const s of entry.wave.spawns) max += DRONE_SPECS[s.typeId].bounty * TRACKED_KILL_BONUS;
+      for (const s of entry.wave.spawns) {
+        max += DRONE_SPECS[s.typeId].bounty * (s.mods?.bountyMul ?? 1) * TRACKED_KILL_BONUS;
+      }
       max += entry.wave.stipend * 0.4;
     } else {
       max += 4 * 120; // a perfect 4/4 boss
     }
   }
-  return Math.ceil(max * 1.05); // small margin for rounding
+  return Math.ceil(max * 1.08); // small margin for rounding
 }
 
 export interface ValidationResult {
@@ -113,8 +115,6 @@ export interface ValidationResult {
   clean?: Omit<ScoreEntry, "id" | "ts">;
 }
 
-const CAP = maxPlausibleScore();
-
 /** Server-side validation: shape, ranges, and the plausibility cap (spec §10). */
 export function validateSubmission(sub: Submission): ValidationResult {
   if (!sub || typeof sub !== "object") return { ok: false, reason: "malformed" };
@@ -122,13 +122,14 @@ export function validateSubmission(sub: Submission): ValidationResult {
   if (!stats || typeof stats.score !== "number" || !Number.isFinite(stats.score)) {
     return { ok: false, reason: "bad score" };
   }
+  const levelId = typeof stats.levelId === "string" ? stats.levelId.slice(0, 40) : "mil-facility";
+  const level = getLevel(levelId);
   const score = Math.floor(stats.score);
   if (score < 0) return { ok: false, reason: "negative score" };
-  if (score > CAP) return { ok: false, reason: "implausible score" };
-  if (typeof stats.wavesSurvived !== "number" || stats.wavesSurvived < 0 || stats.wavesSurvived > SCHEDULE.length) {
+  if (score > maxPlausibleScore(levelId)) return { ok: false, reason: "implausible score" };
+  if (typeof stats.wavesSurvived !== "number" || stats.wavesSurvived < 0 || stats.wavesSurvived > level.schedule.length) {
     return { ok: false, reason: "bad waves" };
   }
-  const levelId = typeof stats.levelId === "string" ? stats.levelId.slice(0, 40) : "mil-facility";
   return {
     ok: true,
     clean: {
