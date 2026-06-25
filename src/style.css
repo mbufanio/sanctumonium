@@ -804,3 +804,78 @@ body {
 .site-wrinkle { font-size: 0.82rem; color: var(--coverage); line-height: 1.4; margin-top: 0.2rem; }
 .wrinkle-tag { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.12em; color: var(--brain-gold); border: 1px solid var(--brain-gold); border-radius: 4px; padding: 0.05rem 0.3rem; margin-right: 0.4rem; }
 @media (max-width: 720px) { .site-grid { grid-template-columns: 1fr; } }
+
+/* ---- Phase 7: booth hardening (attract, staff panel, colorblind) -------- */
+
+#attract-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none; /* taps pass through to the global input handler */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 8vh;
+  gap: 0.6rem;
+}
+.attract-badge {
+  font-family: var(--mono);
+  letter-spacing: 0.3em;
+  font-size: 0.9rem;
+  color: var(--brain);
+  border: 1px solid var(--brain);
+  border-radius: 8px;
+  padding: 0.4rem 0.9rem;
+  background: rgba(0, 0, 0, 0.5);
+  text-shadow: 0 0 16px rgba(0, 229, 255, 0.6);
+}
+.attract-cta {
+  font-family: var(--font);
+  font-weight: 800;
+  font-size: clamp(1.4rem, 4vw, 2.4rem);
+  color: var(--text);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+#staff-panel {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 200;
+  background: rgba(6, 13, 21, 0.96);
+  border: 1px solid var(--brain);
+  border-radius: 12px;
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+.sp-head { font-family: var(--mono); letter-spacing: 0.16em; font-size: 0.7rem; color: var(--brain); margin-bottom: 0.2rem; }
+#staff-panel button {
+  cursor: pointer;
+  min-width: 160px;
+  min-height: 40px;
+  text-align: left;
+  padding: 0 0.7rem;
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+}
+#staff-panel button.sp-panic { color: var(--bad); border-color: rgba(255, 84, 112, 0.5); }
+
+/* Colorblind mode: push threats toward amber and friendlies toward a brighter
+   blue, with shape cues already in place (triangles vs circles/squares). */
+body.cb {
+  --threat: #ff8c1a;
+  --threat-track: #ffd28a;
+  --friendly: #38b6ff;
+  --coverage: #19e3c0;
+}

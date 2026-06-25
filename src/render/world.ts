@@ -32,6 +32,9 @@ interface ActiveFx {
   ttl: number;
 }
 
+/** Cap on simultaneously-animated effects (perf for the swarm finale). */
+const MAX_FX = 220;
+
 interface Ghost {
   placeableId: string;
   hex: Hex;
@@ -256,6 +259,9 @@ export class WorldRenderer {
         this.activeFx.push({ fx, age: 0, ttl });
       }
       rt.fx = [];
+      // Perf cap for the heavy swarm finale: keep only the newest effects so
+      // the draw list can't balloon when hundreds of shots fire at once.
+      if (this.activeFx.length > MAX_FX) this.activeFx.splice(0, this.activeFx.length - MAX_FX);
     }
 
     this.fxGfx.clear();

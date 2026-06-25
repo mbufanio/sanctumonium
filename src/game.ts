@@ -11,7 +11,7 @@
  */
 import { Application } from "pixi.js";
 import { Rng, timeSeed } from "./sim/rng.ts";
-import { ringDistance, hexKey, type Hex } from "./sim/hex.ts";
+import { ringDistance, hexKey, hexRing, type Hex } from "./sim/hex.ts";
 import { LEVEL_1, LEVELS, type LevelDef } from "./sim/level.ts";
 import { buildTerrain, isBlockedForBuild, type TerrainMap } from "./sim/terrain.ts";
 import {
@@ -52,7 +52,19 @@ export class Game {
   private recDismissed = false;
   private terrain: TerrainMap = new Map();
 
+  // Booth hardening (spec §14 Phase 7).
+  private overlay: HTMLElement;
+  private attract = false;
+  private lastInput = 0;
+  private attractTimer: number | null = null;
+  private fullscreenArmed = false;
+  private attractLevelCursor = 0;
+  private staffPanel: HTMLElement | null = null;
+  private static readonly IDLE_MS = 35_000;
+  private static readonly ATTRACT_STEP_MS = 1100;
+
   constructor(overlay: HTMLElement) {
+    this.overlay = overlay;
     this.state = createInitialState(LEVEL_1);
     this.rng = new Rng(timeSeed());
     this.world = new WorldRenderer();
@@ -87,7 +99,7 @@ export class Game {
     this.world.drawStatic(this.state);
     this.installLoop(this.world.app);
     this.installInput();
-    this.installStaffToggle();
+    this.installBooth();
     // Dedicated second-screen attract display: index.html?display=board
     if (new URLSearchParams(location.search).get("display") === "board") {
       this.state.phase = "summary"; // park the sim; just show the live board
@@ -304,6 +316,11 @@ export class Game {
     s.victory = victory;
     s.phase = "summary";
     s.rt = null;
+    // In the attract demo, don't prompt for a score — just loop to the next run.
+    if (this.attract) {
+      this.startAttractDemo();
+      return;
+    }
     this.console.clear();
     this.hud.clear();
     this.world.setGhost(null);
@@ -406,6 +423,7 @@ export class Game {
   }
 
   private handleFieldTap(hex: Hex): void {
+    if (this.attract) return; // attract taps exit the demo, never place
     const s = this.state;
     const occupant = s.placed.find((d) => hexKey(d.hex) === hexKey(hex));
     if (occupant) {
@@ -517,26 +535,241 @@ export class Game {
     this.renderBoss();
   }
 
-  // ---- staff sales toggle (spec §6.2) ------------------------------------
+  // ---- booth hardening (spec §14 Phase 7) --------------------------------
 
-  private installStaffToggle(): void {
-    window.addEventListener("keydown", (e) => {
-      // Staff: 'L' toggles the live leaderboard from the title screen.
-      if (e.key.toLowerCase() === "l" && (this.state.phase === "title" || this.leaderboard.liveActive)) {
-        if (this.leaderboard.liveActive) this.goTitle();
-        else this.leaderboard.showLive(this.state.level.id);
-        return;
+  private installBooth(): void {
+    this.lastInput = Date.now();
+    // Any input refreshes the idle clock and exits the attract demo. Capture
+    // phase so it runs before the canvas placement handler.
+    window.addEventListener("pointerdown", () => this.onUserInput(), true);
+    window.addEventListener("keydown", (e) => this.onBoothKey(e), true);
+    // Kiosk input hardening: no right-click menu, pinch-zoom, or double-tap zoom.
+    window.addEventListener("contextmenu", (e) => e.preventDefault());
+    window.addEventListener("gesturestart", (e) => e.preventDefault());
+    document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
+    window.setInterval(() => this.checkIdle(), 2000);
+  }
+
+  private onUserInput(): void {
+    this.lastInput = Date.now();
+    this.armFullscreen();
+    if (this.attract) this.exitAttract();
+  }
+
+  private onBoothKey(e: KeyboardEvent): void {
+    this.lastInput = Date.now();
+    const k = e.key.toLowerCase();
+    if (this.attract) {
+      this.exitAttract();
+      return;
+    }
+    if (k === "l" && (this.state.phase === "title" || this.leaderboard.liveActive)) {
+      if (this.leaderboard.liveActive) this.goTitle();
+      else this.leaderboard.showLive(this.state.level.id);
+    } else if (k === "b") {
+      this.toggleBrain();
+    } else if (k === "s") {
+      this.toggleStaffPanel();
+    }
+  }
+
+  /** Kiosk fullscreen + landscape lock — requested on the first user gesture. */
+  private armFullscreen(): void {
+    if (this.fullscreenArmed) return;
+    this.fullscreenArmed = true;
+    document.documentElement.requestFullscreen?.().catch(() => {});
+    try {
+      (screen.orientation as unknown as { lock?: (o: string) => Promise<void> })?.lock?.("landscape").catch(() => {});
+    } catch {
+      /* desktop / unsupported — ignore */
+    }
+  }
+
+  private checkIdle(): void {
+    if (this.attract) return;
+    if (Date.now() - this.lastInput > Game.IDLE_MS) this.enterAttract();
+  }
+
+  // ---- attract mode (auto-playing demo) ----------------------------------
+
+  private enterAttract(): void {
+    if (this.attract) return;
+    this.attract = true;
+    this.attractLevelCursor = 0;
+    this.startAttractDemo();
+    this.attractTimer = window.setInterval(() => this.attractTick(), Game.ATTRACT_STEP_MS);
+  }
+
+  private exitAttract(): void {
+    if (!this.attract) return;
+    this.attract = false;
+    if (this.attractTimer !== null) {
+      window.clearInterval(this.attractTimer);
+      this.attractTimer = null;
+    }
+    this.hideAttractOverlay();
+    this.state.rt = null;
+    this.state.phase = "title"; // so the same tap can't also place a device
+    this.showLevelSelect();
+  }
+
+  private startAttractDemo(): void {
+    const level = LEVELS[this.attractLevelCursor % LEVELS.length];
+    this.attractLevelCursor++;
+    this.startRunOnLevel(level);
+    this.showAttractOverlay();
+  }
+
+  /** One step of the bot: advance whatever phase the demo is in. */
+  private attractTick(): void {
+    if (!this.attract) return;
+    switch (this.state.phase) {
+      case "build":
+        this.attractBuild();
+        break;
+      case "boss":
+        this.attractBoss();
+        break;
+      case "unlock":
+        this.afterUnlock();
+        break;
+      case "title":
+      case "summary":
+        this.startAttractDemo();
+        break;
+      // "wave" → just watch it play out.
+    }
+    this.showAttractOverlay(); // keep the badge on top through re-renders
+  }
+
+  private attractBuild(): void {
+    if (this.currentRec) this.acceptRecommendation();
+    this.attractPlace("radar");
+    this.attractPlace("net-drone");
+    this.attractPlace("net-drone");
+    this.startScheduleEntry();
+  }
+
+  private attractPlace(id: string): boolean {
+    const s = this.state;
+    const p = placeableById(id);
+    if (!p || s.currency < p.cost) return false;
+    for (const ring of [2, 3, 4]) {
+      for (const h of hexRing(ring)) {
+        if (this.isPlaceable(h)) {
+          s.currency -= p.cost;
+          s.spent += p.cost;
+          s.placed.push(makePlaced(id, h));
+          return true;
+        }
       }
-      if (e.key.toLowerCase() !== "b") return;
-      this.state.brainStaffDisabled = !this.state.brainStaffDisabled;
-      const s = this.state.boss;
-      if (s && this.state.brainUnlocked && !s.result && this.currentBossIndex === 2) {
-        s.brain = !this.state.brainStaffDisabled;
-        s.optimal = s.brain ? computeOptimal(s.cfg) : null;
-        this.renderBoss();
+    }
+    return false;
+  }
+
+  private attractBoss(): void {
+    const s = this.state.boss;
+    if (!s) return;
+    if (s.result) {
+      this.afterBoss();
+      return;
+    }
+    if (s.brain && s.optimal) {
+      this.bossApplyOptimal();
+    } else {
+      const sensors = [...s.cfg.sensors];
+      const effs = [...s.cfg.effectors];
+      for (const t of s.cfg.threats) {
+        s.map[t.id] = { sensorId: sensors.shift()?.id ?? null, effectorId: effs.shift()?.id ?? null };
       }
-      this.flashStaffToast();
+    }
+    this.bossEngage();
+  }
+
+  private showAttractOverlay(): void {
+    let o = document.getElementById("attract-overlay");
+    if (!o) {
+      o = document.createElement("div");
+      o.id = "attract-overlay";
+      o.innerHTML = `<div class="attract-badge">◈ AUTO-DEMO</div><div class="attract-cta">TAP TO PLAY</div>`;
+    }
+    this.overlay.append(o); // re-append → stays on top of fresh renders
+  }
+
+  private hideAttractOverlay(): void {
+    document.getElementById("attract-overlay")?.remove();
+  }
+
+  // ---- staff panel (spec §6.2, §14 Phase 7) ------------------------------
+
+  private toggleBrain(): void {
+    this.state.brainStaffDisabled = !this.state.brainStaffDisabled;
+    const s = this.state.boss;
+    if (s && this.state.brainUnlocked && !s.result && this.currentBossIndex === 2) {
+      s.brain = !this.state.brainStaffDisabled;
+      s.optimal = s.brain ? computeOptimal(s.cfg) : null;
+      this.renderBoss();
+    }
+    this.flashStaffToast();
+    this.refreshStaffPanel();
+  }
+
+  private toggleStaffPanel(): void {
+    if (this.staffPanel) {
+      this.staffPanel.remove();
+      this.staffPanel = null;
+      return;
+    }
+    const panel = document.createElement("div");
+    panel.id = "staff-panel";
+    document.body.append(panel);
+    this.staffPanel = panel;
+    this.refreshStaffPanel();
+  }
+
+  private refreshStaffPanel(): void {
+    if (!this.staffPanel) return;
+    const cb = document.body.classList.contains("cb");
+    this.staffPanel.innerHTML = `
+      <div class="sp-head">STAFF PANEL</div>
+      <button data-act="brain">Brain: ${this.state.brainStaffDisabled ? "OFF" : "ON"}</button>
+      <button data-act="cb">Colorblind: ${cb ? "ON" : "OFF"}</button>
+      <button data-act="full">Fullscreen</button>
+      <button data-act="panic" class="sp-panic">Panic reset</button>
+      <button data-act="close">Close</button>
+    `;
+    this.staffPanel.querySelectorAll("button").forEach((b) => {
+      (b as HTMLButtonElement).onclick = () => {
+        const act = (b as HTMLElement).dataset.act;
+        if (act === "brain") this.toggleBrain();
+        else if (act === "cb") this.toggleColorblind();
+        else if (act === "full") {
+          this.fullscreenArmed = false;
+          this.armFullscreen();
+        } else if (act === "panic") this.panicReset();
+        else if (act === "close") this.toggleStaffPanel();
+      };
     });
+  }
+
+  private toggleColorblind(): void {
+    document.body.classList.toggle("cb");
+    this.refreshStaffPanel();
+  }
+
+  /** Panic reset for booth staff — abandon everything, back to a clean title. */
+  private panicReset(): void {
+    this.attract = false;
+    if (this.attractTimer !== null) {
+      window.clearInterval(this.attractTimer);
+      this.attractTimer = null;
+    }
+    this.hideAttractOverlay();
+    this.staffPanel?.remove();
+    this.staffPanel = null;
+    this.state.rt = null;
+    this.world.setGhost(null);
+    this.goTitle();
   }
 
   private flashStaffToast(): void {

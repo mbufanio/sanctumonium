@@ -7,7 +7,7 @@ real branding, product names, model numbers, or performance figures. See
 [`CUAS_TRADESHOW_GAME_SPEC.md`](./CUAS_TRADESHOW_GAME_SPEC.md) for the full
 design intent — it is the source of truth.
 
-## Status — Phases 0–6
+## Status — Phases 0–7
 
 The build is sequenced so the slice proving the value proposition ships first
 (spec §14). Implemented so far:
@@ -119,6 +119,27 @@ brain unlock → Boss #2 (clean win) → side-by-side summary + conversion hando
   no-fire lines, **Stadium** dense urban blockers (and the line-of-sight laser is
   restricted there). Energy leads as the booth's opener.
 
+- **Phase 7 — Booth hardening.** The unattended-kiosk pass (spec §11) so the
+  game survives a trade-show floor with no operator babysitting it:
+  - **Attract / idle auto-demo** — after ~35s of no input the game fades up an
+    `◈ AUTO-DEMO · TAP TO PLAY` overlay and a bot plays a live run (builds a
+    layout, fights waves, resolves the boss) on the attract field. Any tap drops
+    straight back to the site-select screen for the next visitor — so the booth
+    is always showing motion, never a dead title card.
+  - **Auto-reset between players** — runs that end while no one is watching loop
+    back into the attract demo instead of parking on a score screen, and the
+    attract bot never submits a leaderboard score.
+  - **Kiosk lock** — first interaction arms fullscreen and an orientation hint;
+    context menu, text selection, pinch-zoom, and accidental drag/scroll are
+    suppressed so curious hands can't break the frame.
+  - **Staff panel** — press **`S`** for a discreet operator panel (toggle the
+    coordination brain for the "watch your odds go dark" pitch, flip colorblind
+    mode, and **panic-reset** the booth to a clean title).
+  - **Performance pass** — the heavy swarm finale caps live effects so the
+    spectacle never tanks the frame rate on booth hardware.
+  - **Accessibility** — a colorblind palette mode and a touch-target audit so the
+    controls work for everyone walking up.
+
 ### The teaching matchups (spec §6)
 
 Odds depend on three *legible* factors — effector-vs-threat-type, whether the
@@ -163,6 +184,10 @@ one instance so they share a board. `PORT` and `DATA_PATH` are configurable.
   (spec §6.2). A toast confirms the state.
 - Press **`L`** at the title (or open `?display=board`) for the full-screen
   live leaderboard — the second-screen attract display.
+- Press **`S`** for the staff panel — toggle the coordination brain, flip
+  colorblind mode, or **panic-reset** the booth to a clean title.
+- The booth **auto-attracts**: after ~35s idle it runs a hands-free demo with a
+  `TAP TO PLAY` overlay, and any tap hands the booth to the next visitor.
 
 ## Architecture
 
@@ -203,7 +228,7 @@ src/
     leaderboard.ts     # submit / board / takeaway / live-board UI
     takeaway.ts        # one-page report rendered to a downloadable PNG
   theme.ts             # the color & signal language (spec §3)
-  game.ts              # controller: state, loop, transitions, staff toggle
+  game.ts              # controller: state, loop, transitions, booth/attract + staff panel
   main.ts              # entry point
 server/                # leaderboard backend (run via `npm run server`)
   index.ts             # dependency-free Node HTTP API (validate, rate-limit, CORS)
@@ -217,8 +242,10 @@ Following the spec's recommendations: between-waves building only (Phase 2),
 toggle, per-level leaderboards (Phase 5), and suggest-and-accept layout
 recommendations (Phase 3).
 
-## Not yet built
+## Feature-complete
 
-Phase 7 — booth hardening: attract/idle auto-demo, auto-reset between players,
-kiosk fullscreen lock, a polished staff panel, a performance pass for the heavy
-finale, and a colorblind / touch-target audit. See the spec for the full plan.
+All phases in the spec's §14 phased plan (0–7) are implemented. The build is a
+shippable booth experience end-to-end: the value-proving boss minigame, the
+real-time defense loop with the brain's three faces, the tech-gradient climb,
+four data-driven sites with terrain/line-of-sight, a persistent leaderboard with
+a printable takeaway, and the unattended-kiosk hardening pass.
