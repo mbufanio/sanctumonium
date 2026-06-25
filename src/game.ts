@@ -16,13 +16,14 @@ import { LEVEL_1 } from "./sim/level.ts";
 import {
   createInitialState,
   makePlaced,
+  upgradeDevice,
   type BossSession,
   type GameState,
 } from "./sim/state.ts";
-import { placeableById, TRACKED_KILL_BONUS } from "./sim/realtime/catalog.ts";
+import { placeableById, nextUpgrade, TRACKED_KILL_BONUS } from "./sim/realtime/catalog.ts";
 import { createRealtimeState } from "./sim/realtime/types.ts";
 import { stepWave } from "./sim/realtime/engine.ts";
-import { SCHEDULE, bossConfigFromLayout } from "./sim/realtime/schedule.ts";
+import { SCHEDULE, bossConfigFromLayout, tierForScheduleIndex } from "./sim/realtime/schedule.ts";
 import { adaptWave, recommendPlacement, type Recommendation } from "./sim/realtime/adaptive.ts";
 import { computeOptimal, emptyAssignment, resolveEncounter } from "./sim/boss/engine.ts";
 import { WorldRenderer } from "./render/world.ts";
@@ -69,6 +70,9 @@ export class Game {
       onSell: (id) => this.sell(id),
       onAcceptRec: () => this.acceptRecommendation(),
       onDismissRec: () => this.dismissRecommendation(),
+      onUpgradeDevice: () => this.upgradeSelectedDevice(),
+      onSellDevice: () => this.sellSelectedDevice(),
+      onCloseDevice: () => this.closeDevicePanel(),
     });
   }
 
@@ -152,6 +156,8 @@ export class Game {
       return;
     }
     this.recDismissed = false;
+    s.selectedDeviceId = null;
+    s.maxTier = tierForScheduleIndex(s.scheduleIndex);
     this.refreshBuildDock();
   }
 
@@ -188,6 +194,7 @@ export class Game {
       s.activeWave = adaptWave(entry.wave, s.placed, this.world.spawnRadius(s), this.rng);
       for (const d of s.placed) d.cooldown = 0;
       s.selectedPlaceable = null;
+      s.selectedDeviceId = null;
       this.world.setGhost(null);
       this.hud.hideBuild();
     } else {
@@ -285,6 +292,35 @@ export class Game {
 
   private selectPlaceable(id: string): void {
     this.state.selectedPlaceable = this.state.selectedPlaceable === id ? null : id;
+    this.state.selectedDeviceId = null;
+    this.refreshBuildDock();
+  }
+
+  /** Upgrade the currently-selected placed device (spec §7 within-class path). */
+  private upgradeSelectedDevice(): void {
+    const s = this.state;
+    const dev = s.placed.find((d) => d.id === s.selectedDeviceId);
+    if (!dev) return;
+    const p = placeableById(dev.placeableId);
+    const step = p ? nextUpgrade(p, dev.level) : null;
+    if (!step || s.currency < step.cost) return;
+    s.currency -= step.cost;
+    upgradeDevice(dev);
+    this.refreshBuildDock();
+  }
+
+  private sellSelectedDevice(): void {
+    const s = this.state;
+    const dev = s.placed.find((d) => d.id === s.selectedDeviceId);
+    if (dev) {
+      this.sell(dev.id);
+      s.selectedDeviceId = null;
+    }
+    this.refreshBuildDock();
+  }
+
+  private closeDevicePanel(): void {
+    this.state.selectedDeviceId = null;
     this.refreshBuildDock();
   }
 
@@ -331,7 +367,16 @@ export class Game {
     const s = this.state;
     const occupant = s.placed.find((d) => hexKey(d.hex) === hexKey(hex));
     if (occupant) {
-      this.sell(occupant.id);
+      // Tap a placed device → open its upgrade/sell panel (toggle).
+      s.selectedDeviceId = s.selectedDeviceId === occupant.id ? null : occupant.id;
+      s.selectedPlaceable = null;
+      this.world.setGhost(null);
+      this.refreshBuildDock();
+      return;
+    }
+    if (s.selectedDeviceId) {
+      s.selectedDeviceId = null;
+      this.refreshBuildDock();
       return;
     }
     if (!s.selectedPlaceable) return;
@@ -352,7 +397,12 @@ export class Game {
     if (idx < 0) return;
     const dev = s.placed[idx];
     const p = placeableById(dev.placeableId);
-    if (p) s.currency += Math.floor(p.cost * SELL_REFUND);
+    if (p) {
+      // Refund a fraction of everything invested — base + applied upgrades.
+      let invested = p.cost;
+      for (let i = 0; i < dev.level && i < p.upgrades.length; i++) invested += p.upgrades[i].cost;
+      s.currency += Math.floor(invested * SELL_REFUND);
+    }
     s.placed.splice(idx, 1);
     this.refreshBuildDock();
   }

@@ -6,14 +6,28 @@ import type { Hex, Px } from "../hex.ts";
 import type { ThreatTypeId } from "../boss/types.ts";
 import type { DeviceKind } from "./catalog.ts";
 
-/** A device the player has placed on the hex field. */
+/**
+ * A device the player has placed on the hex field. It carries its OWN combat
+ * stats (so upgrades and tier-2/3 gear work without the boss tables): radius,
+ * fire interval, AOE, and the effect/track matrices, plus its upgrade level.
+ */
 export interface PlacedDevice {
   id: string;
   kind: DeviceKind;
   placeableId: string;
   hex: Hex;
   pos: Px;
+  /** Upgrade level (0 = base; each step in the placeable's upgrade path is +1). */
+  level: number;
   radius: number;
+  /** Effectors: seconds between shots. */
+  fireInterval: number;
+  /** Effectors: area-of-effect radius in plane units (0 = single target). */
+  aoe: number;
+  /** Effectors: effectiveness per threat type. */
+  effect: Record<ThreatTypeId, number>;
+  /** Sensors: tracking quality per threat type. */
+  track: Record<ThreatTypeId, number>;
   /** Effectors: remaining seconds until the next shot may fire. */
   cooldown: number;
 }
@@ -40,7 +54,9 @@ export type Fx =
   | { kind: "kill"; at: Px }
   | { kind: "leak"; at: Px; damage: number }
   // Brain coordination: a sensor handing a track to the effector engaging it.
-  | { kind: "handoff"; from: Px; to: Px };
+  | { kind: "handoff"; from: Px; to: Px }
+  // Area effector blast (HPM / plasma / beam): a ring expanding at `at`.
+  | { kind: "aoe"; at: Px; radius: number; effector: string };
 
 /** A queued spawn: emit a drone of `typeId` at sim time `at`, bearing `bearing`. */
 export interface SpawnEntry {

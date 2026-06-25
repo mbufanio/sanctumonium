@@ -12,7 +12,7 @@
 import { hexToPlane, type Hex } from "./hex.ts";
 import type { AssignmentMap, BossConfig, EncounterResult } from "./boss/types.ts";
 import type { LevelDef } from "./level.ts";
-import { placeableById } from "./realtime/catalog.ts";
+import { deviceStats, placeableById, type Tier } from "./realtime/catalog.ts";
 import type { PlacedDevice, RealtimeState, WaveDef } from "./realtime/types.ts";
 
 export type AppPhase =
@@ -46,12 +46,17 @@ export interface GameState {
   integrity: number;
   maxIntegrity: number;
 
+  /** Highest device tier currently unlocked in the palette (spec §7 climb). */
+  maxTier: Tier;
+
   // Schedule / waves.
   scheduleIndex: number;
   rt: RealtimeState | null;
   activeWave: WaveDef | null;
   /** Build palette selection (placeable id) or null. */
   selectedPlaceable: string | null;
+  /** A placed device currently selected for upgrade/sell, or null. */
+  selectedDeviceId: string | null;
 
   // Brain.
   brainUnlocked: boolean;
@@ -67,15 +72,34 @@ let deviceSeq = 0;
 
 export function makePlaced(placeableId: string, hex: Hex): PlacedDevice {
   const p = placeableById(placeableId)!;
+  const s = deviceStats(p, 0);
   return {
     id: `dev-${deviceSeq++}`,
     kind: p.kind,
     placeableId,
     hex,
     pos: hexToPlane(hex),
-    radius: p.radius,
+    level: 0,
+    radius: s.radius,
+    fireInterval: s.fireInterval,
+    aoe: s.aoe,
+    effect: s.effect,
+    track: s.track,
     cooldown: 0,
   };
+}
+
+/** Apply the next within-class upgrade to a placed device (recomputes stats). */
+export function upgradeDevice(dev: PlacedDevice): void {
+  const p = placeableById(dev.placeableId);
+  if (!p || dev.level >= p.upgrades.length) return;
+  dev.level += 1;
+  const s = deviceStats(p, dev.level);
+  dev.radius = s.radius;
+  dev.fireInterval = s.fireInterval;
+  dev.aoe = s.aoe;
+  dev.effect = s.effect;
+  dev.track = s.track;
 }
 
 export function createInitialState(level: LevelDef): GameState {
@@ -94,10 +118,12 @@ export function createInitialState(level: LevelDef): GameState {
     score: 0,
     integrity: 100,
     maxIntegrity: 100,
+    maxTier: 1,
     scheduleIndex: 0,
     rt: null,
     activeWave: null,
     selectedPlaceable: null,
+    selectedDeviceId: null,
     brainUnlocked: false,
     brainStaffDisabled: false,
     boss: null,

@@ -12,6 +12,7 @@
  */
 import { hexToPlane, planeLen } from "../hex.ts";
 import { BOSS_1, BOSS_2 } from "../boss/data.ts";
+import { BOSS_KNOWN } from "./catalog.ts";
 import type { BossConfig, DeviceUnit, EffectorTypeId, SensorTypeId } from "../boss/types.ts";
 import type { ThreatTypeId } from "../boss/types.ts";
 import type { PlacedDevice, SpawnEntry, WaveDef } from "./types.ts";
@@ -57,9 +58,20 @@ export const SCHEDULE: ScheduleEntry[] = [
   { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 2 }], 120) },
   { type: "boss", bossIndex: 2 },
   { type: "wave", wave: makeWave(6, [{ typeId: "rf-quad", count: 8 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 3 }], 140) },
-  { type: "wave", wave: makeWave(7, [{ typeId: "rf-quad", count: 8 }, { typeId: "autonomy", count: 4 }, { typeId: "low-observable", count: 4 }], 160) },
-  { type: "wave", wave: makeWave(8, [{ typeId: "rf-quad", count: 10 }, { typeId: "autonomy", count: 5 }, { typeId: "low-observable", count: 4 }], 190) },
+  { type: "wave", wave: makeWave(7, [{ typeId: "rf-quad", count: 9 }, { typeId: "autonomy", count: 4 }, { typeId: "low-observable", count: 4 }], 160) },
+  // Escalation finale (spec §7) — the swarm scales up until it overwhelms you.
+  { type: "wave", wave: makeWave(8, [{ typeId: "rf-quad", count: 13 }, { typeId: "autonomy", count: 6 }, { typeId: "low-observable", count: 6 }], 220) },
+  { type: "wave", wave: makeWave(9, [{ typeId: "rf-quad", count: 22 }, { typeId: "autonomy", count: 12 }, { typeId: "low-observable", count: 10 }], 320) },
 ];
+
+/** Tier that should be unlocked by the time the player reaches a schedule step.
+ *  Tier 2 opens after boss #1 (the unlock), tier 3 after boss #2 (the catharsis). */
+export function tierForScheduleIndex(index: number): 1 | 2 | 3 {
+  // Indices: 0,1 = waves; 2 = boss1; 3,4,5 = waves; 6 = boss2; 7,8 = finale.
+  if (index >= 7) return 3; // after boss #2
+  if (index >= 3) return 2; // after boss #1
+  return 1;
+}
 
 /** Bearing (deg, 0 = north) of a placed device's hex around the centre. */
 function bearingOfHex(d: PlacedDevice): number {
@@ -79,13 +91,15 @@ function bearingOfHex(d: PlacedDevice): number {
 export function bossConfigFromLayout(placed: PlacedDevice[], bossIndex: 1 | 2): BossConfig {
   const base = bossIndex === 1 ? BOSS_1 : BOSS_2;
 
+  // The boss assignment minigame is the tier-1 teaching tool, so it only
+  // fields the gear it understands; fancy tier-2/3 weapons sit the boss out.
   const sensors: DeviceUnit[] = placed
-    .filter((p) => p.kind === "sensor")
+    .filter((p) => p.kind === "sensor" && BOSS_KNOWN.has(p.placeableId))
     .slice(0, 6)
     .map((p, i) => ({ id: `s-${i}`, typeId: p.placeableId as SensorTypeId, bearing: bearingOfHex(p) }));
 
   const effectors: DeviceUnit[] = placed
-    .filter((p) => p.kind === "effector")
+    .filter((p) => p.kind === "effector" && BOSS_KNOWN.has(p.placeableId))
     .slice(0, 6)
     .map((p, i) => ({ id: `e-${i}`, typeId: p.placeableId as EffectorTypeId, bearing: bearingOfHex(p) }));
 

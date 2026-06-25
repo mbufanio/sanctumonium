@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { hexToPlane } from "../hex.ts";
 import { computeOptimal, resolveEncounter } from "../boss/engine.ts";
 import { Rng } from "../rng.ts";
+import { makePlaced } from "../state.ts";
 import { SCHEDULE, bossConfigFromLayout } from "./schedule.ts";
 import type { PlacedDevice } from "./types.ts";
 
-function dev(kind: "sensor" | "effector", placeableId: string, q: number, r: number): PlacedDevice {
-  return { id: `${placeableId}-${q}-${r}`, kind, placeableId, hex: { q, r }, pos: hexToPlane({ q, r }), radius: 100, cooldown: 0 };
+function dev(_kind: "sensor" | "effector", placeableId: string, q: number, r: number): PlacedDevice {
+  return makePlaced(placeableId, { q, r });
 }
 
 describe("wave schedule", () => {

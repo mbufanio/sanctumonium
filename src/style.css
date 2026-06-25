@@ -634,3 +634,56 @@ body {
   transition: opacity 0.3s ease;
 }
 .hud-coord.on { opacity: 1; }
+
+/* ---- Phase 4: tier badges + device upgrade panel ----------------------- */
+
+.pal-tier {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  margin-left: auto;
+  margin-right: 0.4rem;
+}
+.pal-tier.t1 { color: var(--text-dim); border: 1px solid var(--panel-edge); }
+.pal-tier.t2 { color: #8be9ff; border: 1px solid #8be9ff; }
+.pal-tier.t3 { color: #ff5cf0; border: 1px solid #ff5cf0; text-shadow: 0 0 8px rgba(255, 92, 240, 0.5); }
+
+.dev-panel {
+  pointer-events: auto;
+  width: min(560px, 92vw);
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--friendly);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(79, 195, 247, 0.10), rgba(79, 195, 247, 0.03));
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.dp-head { display: flex; align-items: center; gap: 0.6rem; }
+.dp-name { font-weight: 700; font-size: 1.05rem; }
+.dp-lvl { margin-left: auto; font-family: var(--mono); font-size: 0.78rem; color: var(--brain-gold); }
+.dp-actions { display: flex; gap: 0.5rem; align-items: stretch; }
+.dp-upgrade {
+  pointer-events: auto; cursor: pointer;
+  flex: 1; min-height: 48px;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  font-family: var(--font); font-weight: 700; font-size: 0.95rem;
+  border: none; border-radius: 9px;
+  color: #04222b;
+  background: linear-gradient(180deg, #9be7ff, var(--friendly));
+  padding: 0 1rem;
+  box-shadow: 0 4px 14px rgba(79, 195, 247, 0.35);
+}
+.dp-upgrade.poor { opacity: 0.5; cursor: default; }
+.dp-cost { font-family: var(--mono); }
+.dp-maxed { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 0.9rem; font-style: italic; }
+.dp-sell, .dp-close {
+  pointer-events: auto; cursor: pointer;
+  min-height: 48px; padding: 0 1.1rem;
+  font-family: var(--font); font-weight: 600; font-size: 0.9rem;
+  border: 1px solid var(--panel-edge); border-radius: 9px;
+  background: transparent; color: var(--text-dim);
+}
+.dp-sell { color: var(--threat-track); border-color: rgba(255, 107, 74, 0.5); }

@@ -9,7 +9,7 @@
  * The HUD sits at the screen edges so the centre of the field stays open for
  * taps; only the actual controls capture pointer events.
  */
-import { PLACEABLES, type Placeable } from "../sim/realtime/catalog.ts";
+import { placeablesForTier, placeableById, nextUpgrade, type Placeable } from "../sim/realtime/catalog.ts";
 import type { Recommendation } from "../sim/realtime/adaptive.ts";
 import type { GameState } from "../sim/state.ts";
 
@@ -19,6 +19,9 @@ export interface HudCallbacks {
   onSell(deviceId: string): void;
   onAcceptRec(): void;
   onDismissRec(): void;
+  onUpgradeDevice(): void;
+  onSellDevice(): void;
+  onCloseDevice(): void;
 }
 
 export class Hud {
@@ -85,20 +88,24 @@ export class Hud {
     this.dock?.remove();
     const dock = el("div", "build-dock");
 
-    // Brain recommendation (face 3) — suggest-and-accept, only after unlock.
-    if (rec) dock.append(this.recCard(rec, state));
+    const selDev = state.selectedDeviceId ? state.placed.find((d) => d.id === state.selectedDeviceId) ?? null : null;
+    if (selDev) {
+      // Selected a placed device → its upgrade/sell panel (spec §7).
+      dock.append(this.devicePanel(selDev, state));
+    } else {
+      // Brain recommendation (face 3) — suggest-and-accept, only after unlock.
+      if (rec) dock.append(this.recCard(rec, state));
 
-    const hint = el("div", "build-hint");
-    hint.textContent = state.selectedPlaceable
-      ? "Tap the field to place · tap a placed device to sell"
-      : "Pick a device, then tap the field to place it";
-    dock.append(hint);
+      const hint = el("div", "build-hint");
+      hint.textContent = state.selectedPlaceable
+        ? "Tap the field to place · tap a placed device to upgrade it"
+        : "Pick a device to place, or tap a placed device to upgrade";
+      dock.append(hint);
 
-    const palette = el("div", "palette");
-    for (const p of PLACEABLES) {
-      palette.append(this.paletteCard(p, state));
+      const palette = el("div", "palette");
+      for (const p of placeablesForTier(state.maxTier)) palette.append(this.paletteCard(p, state));
+      dock.append(palette);
     }
-    dock.append(palette);
 
     const start = el("button", "btn-start") as HTMLButtonElement;
     start.innerHTML = `<span>${nextLabel}</span><span class="start-arrow">▶</span>`;
@@ -109,13 +116,48 @@ export class Hud {
     this.dock = dock;
   }
 
+  private devicePanel(dev: GameState["placed"][number], state: GameState): HTMLElement {
+    const p = placeableById(dev.placeableId)!;
+    const step = nextUpgrade(p, dev.level);
+    const panel = el("div", "dev-panel");
+    panel.innerHTML = `
+      <div class="dp-head">
+        <span class="pal-code ${dev.kind}">${p.code}</span>
+        <span class="dp-name">${p.name}</span>
+        <span class="dp-lvl">LVL ${dev.level + 1}</span>
+      </div>
+    `;
+    const actions = el("div", "dp-actions");
+    if (step) {
+      const afford = state.currency >= step.cost;
+      const up = el("button", "dp-upgrade" + (afford ? "" : " poor")) as HTMLButtonElement;
+      up.disabled = !afford;
+      up.innerHTML = `<span>▲ ${step.label}</span><span class="dp-cost">$${step.cost}</span>`;
+      up.onclick = () => this.cb.onUpgradeDevice();
+      actions.append(up);
+    } else {
+      const maxed = el("div", "dp-maxed");
+      maxed.textContent = "Fully upgraded";
+      actions.append(maxed);
+    }
+    const sell = el("button", "dp-sell") as HTMLButtonElement;
+    sell.textContent = "Sell";
+    sell.onclick = () => this.cb.onSellDevice();
+    const close = el("button", "dp-close") as HTMLButtonElement;
+    close.textContent = "Close";
+    close.onclick = () => this.cb.onCloseDevice();
+    actions.append(sell, close);
+    panel.append(actions);
+    return panel;
+  }
+
   hideBuild(): void {
     this.dock?.remove();
     this.dock = null;
   }
 
   private recCard(rec: Recommendation, state: GameState): HTMLElement {
-    const p = PLACEABLES.find((x) => x.id === rec.placeableId);
+    const p = placeableById(rec.placeableId);
     const afford = !!p && state.currency >= p.cost;
     const card = el("div", "rec-card");
     card.innerHTML = `
@@ -142,7 +184,7 @@ export class Hud {
     card.disabled = !afford;
     card.onclick = () => this.cb.onSelectPlaceable(p.id);
     card.innerHTML = `
-      <div class="pal-top"><span class="pal-code ${p.kind}">${p.code}</span><span class="pal-cost">$${p.cost}</span></div>
+      <div class="pal-top"><span class="pal-code ${p.kind}">${p.code}</span><span class="pal-tier t${p.tier}">T${p.tier}</span><span class="pal-cost">$${p.cost}</span></div>
       <div class="pal-name">${p.name}</div>
       <div class="pal-role">${p.role}</div>
     `;

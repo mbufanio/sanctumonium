@@ -14,8 +14,7 @@
  */
 import { Rng } from "../rng.ts";
 import { planeDist, planeLen, type Px } from "../hex.ts";
-import { EFFECTOR_TYPES, SENSOR_TYPES } from "../boss/data.ts";
-import type { EffectorTypeId, SensorTypeId, ThreatTypeId } from "../boss/types.ts";
+import type { ThreatTypeId } from "../boss/types.ts";
 import { DRONE_SPECS, LEAK_RADIUS } from "./catalog.ts";
 import type { Drone, PlacedDevice, RealtimeState, WaveDef } from "./types.ts";
 
@@ -104,34 +103,45 @@ export function stepWave(
   //    WITH the brain (env.coordinated), fire is DECONFLICTED: a drone already
   //    claimed this step is skipped, so the same hardware kills more per volley.
   const claimed = env.coordinated ? new Set<number>() : null;
+  const resolveHit = (e: PlacedDevice, d: Drone) => {
+    let p = hitChance(e.effect[d.typeId], d.tracked);
+    if (env.coordinated && p > 0) p = Math.min(0.98, p * COORD_ACCURACY);
+    if (!rng.chance(p)) return;
+    d.hp -= 1;
+    if (d.hp <= 0) {
+      d.state = "killed";
+      rt.killed++;
+      kills.push({ typeId: d.typeId, bounty: d.bounty, tracked: d.tracked, pos: d.pos });
+      rt.fx.push({ kind: "kill", at: d.pos });
+    }
+  };
+
   for (const e of effectors) {
     e.cooldown = Math.max(0, e.cooldown - dt);
     if (e.cooldown > 0) continue;
-    const eff = EFFECTOR_TYPES[e.placeableId as EffectorTypeId];
-    const target = pickTarget(rt.drones, e, eff, claimed);
+    const target = pickTarget(rt.drones, e, claimed);
     if (!target) continue;
     if (claimed) claimed.add(target.id);
 
-    e.cooldown = effectorCooldown(e.placeableId as EffectorTypeId);
+    e.cooldown = e.fireInterval;
     // Coordination handoff: show the sensor passing the track to this effector.
     if (env.coordinated && target.tracked) {
       const s = trackingSensor(target, sensors);
       if (s) rt.fx.push({ kind: "handoff", from: s.pos, to: target.pos });
     }
-    // Fused tracks + optimal shot timing make a coordinated shot more reliable
-    // (same hardware, better used). Deconfliction above prevents wasted volleys.
-    let p = hitChance(eff.id, target.typeId, target.tracked);
-    if (env.coordinated && p > 0) p = Math.min(0.98, p * COORD_ACCURACY);
-    const hit = rng.chance(p);
-    rt.fx.push({ kind: "shot", from: e.pos, to: target.pos, effector: e.placeableId, hit });
-    if (hit) {
-      target.hp -= 1;
-      if (target.hp <= 0) {
-        target.state = "killed";
-        rt.killed++;
-        kills.push({ typeId: target.typeId, bounty: target.bounty, tracked: target.tracked, pos: target.pos });
-        rt.fx.push({ kind: "kill", at: target.pos });
+    rt.fx.push({ kind: "shot", from: e.pos, to: target.pos, effector: e.placeableId, hit: true });
+
+    if (e.aoe > 0) {
+      // Area soft-kill: everything affectable within the blast takes the shot.
+      rt.fx.push({ kind: "aoe", at: target.pos, radius: e.aoe, effector: e.placeableId });
+      for (const d of rt.drones) {
+        if (d.state !== "alive") continue;
+        if (e.effect[d.typeId] <= 0) continue;
+        if (planeDist(target.pos, d.pos) > e.aoe) continue;
+        resolveHit(e, d);
       }
+    } else {
+      resolveHit(e, target);
     }
   }
 
@@ -145,8 +155,7 @@ export function stepWave(
 /** A drone is tracked if any in-range sensor can see its type at all. */
 function isTracked(d: Drone, sensors: PlacedDevice[]): boolean {
   for (const s of sensors) {
-    const sen = SENSOR_TYPES[s.placeableId as SensorTypeId];
-    if (sen.track[d.typeId] <= 0) continue;
+    if (s.track[d.typeId] <= 0) continue;
     if (planeDist(s.pos, d.pos) <= s.radius) return true;
   }
   return false;
@@ -154,18 +163,13 @@ function isTracked(d: Drone, sensors: PlacedDevice[]): boolean {
 
 /** Best target for an effector: in range, affectable, tracked-first, then nearest the asset.
  *  When `claimed` is provided (coordinated), drones already taken this step are skipped. */
-function pickTarget(
-  drones: Drone[],
-  e: PlacedDevice,
-  eff: { effect: Record<ThreatTypeId, number> },
-  claimed: Set<number> | null,
-): Drone | null {
+function pickTarget(drones: Drone[], e: PlacedDevice, claimed: Set<number> | null): Drone | null {
   let best: Drone | null = null;
   let bestScore = -Infinity;
   for (const d of drones) {
     if (d.state !== "alive") continue;
     if (claimed?.has(d.id)) continue; // already being engaged this step
-    if (eff.effect[d.typeId] <= 0) continue; // can't affect this type — ignore it
+    if (e.effect[d.typeId] <= 0) continue; // can't affect this type — ignore it
     if (planeDist(e.pos, d.pos) > e.radius) continue;
     // Prefer tracked drones, then those closest to the asset (smallest radius).
     const score = (d.tracked ? 1000 : 0) - planeLen(d.pos);
@@ -182,8 +186,7 @@ function trackingSensor(d: Drone, sensors: PlacedDevice[]): PlacedDevice | null 
   let best: PlacedDevice | null = null;
   let bestDist = Infinity;
   for (const s of sensors) {
-    const sen = SENSOR_TYPES[s.placeableId as SensorTypeId];
-    if (sen.track[d.typeId] <= 0) continue;
+    if (s.track[d.typeId] <= 0) continue;
     const dist = planeDist(s.pos, d.pos);
     if (dist <= s.radius && dist < bestDist) {
       bestDist = dist;
@@ -193,13 +196,9 @@ function trackingSensor(d: Drone, sensors: PlacedDevice[]): PlacedDevice | null 
   return best;
 }
 
-export function hitChance(effId: EffectorTypeId, droneType: ThreatTypeId, tracked: boolean): number {
-  const base = EFFECTOR_TYPES[effId].effect[droneType];
-  return base * (tracked ? 1 : UNTRACKED_PENALTY);
-}
-
-function effectorCooldown(effId: EffectorTypeId): number {
-  return effId === "rf-jammer" ? 1.1 : 1.6;
+/** Single-shot hit probability from an effector's matchup value and track state. */
+export function hitChance(effectBase: number, tracked: boolean): number {
+  return effectBase * (tracked ? 1 : UNTRACKED_PENALTY);
 }
 
 function spawnDrone(rt: RealtimeState, typeId: ThreatTypeId, bearing: number, spawnRadius: number): Drone {

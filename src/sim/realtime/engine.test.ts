@@ -1,15 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "../rng.ts";
-import { hexToPlane } from "../hex.ts";
+import { makePlaced } from "../state.ts";
 import { stepWave, type StepEnv } from "./engine.ts";
-import { RANGE_SCALE } from "./catalog.ts";
 import { createRealtimeState, type PlacedDevice, type WaveDef } from "./types.ts";
 
 const ENV: StepEnv = { spawnRadius: 300 };
 
-function device(kind: "sensor" | "effector", placeableId: string, q: number, r: number): PlacedDevice {
-  const radius = (placeableId === "radar" ? 4 : placeableId === "rf-df" ? 3.2 : placeableId === "net-drone" ? 2.2 : 3.5) * RANGE_SCALE;
-  return { id: `${placeableId}-${q}-${r}`, kind, placeableId, hex: { q, r }, pos: hexToPlane({ q, r }), radius, cooldown: 0 };
+function device(_kind: "sensor" | "effector", placeableId: string, q: number, r: number): PlacedDevice {
+  return makePlaced(placeableId, { q, r });
 }
 
 function singleSpawnWave(typeId: "rf-quad" | "autonomy" | "low-observable"): WaveDef {
@@ -63,6 +61,51 @@ describe("real-time auto-defense", () => {
       if (runToCompletion(placed, singleSpawnWave("autonomy"), seed).kills === 1) stops++;
     }
     expect(stops).toBeGreaterThan(34);
+  });
+});
+
+describe("area effectors (spec §7 — tier-2/3 spectacle)", () => {
+  it("an HPM blast kills several clustered drones in a single shot", () => {
+    // An AESA tracks everything; an HPM (area) sits at the centre. Spawn a tight
+    // cluster from one bearing — one HPM shot should down multiple at once.
+    const placed = [device("sensor", "aesa", 0, 0), device("effector", "hpm", 0, 0)];
+    const rt = createRealtimeState();
+    const rng = new Rng(3);
+    // Five drones bunched on the same bearing, arriving together.
+    const wave: WaveDef = {
+      index: 1,
+      kind: "normal",
+      label: "cluster",
+      spawns: Array.from({ length: 5 }, (_, i) => ({ at: i * 0.02, typeId: "rf-quad" as const, bearing: 0 })),
+      stipend: 0,
+    };
+    let maxKillsInAStep = 0;
+    for (let i = 0; i < 4000; i++) {
+      const res = stepWave(rt, placed, wave, 1 / 60, rng, { spawnRadius: ENV.spawnRadius });
+      maxKillsInAStep = Math.max(maxKillsInAStep, res.kills.length);
+      if (res.waveComplete) break;
+    }
+    expect(maxKillsInAStep).toBeGreaterThan(1); // a single AOE shot took multiple
+  });
+
+  it("a single-target effector only ever kills one per shot", () => {
+    const placed = [device("sensor", "aesa", 0, 0), device("effector", "laser", 0, 0)];
+    const rt = createRealtimeState();
+    const rng = new Rng(3);
+    const wave: WaveDef = {
+      index: 1,
+      kind: "normal",
+      label: "cluster",
+      spawns: Array.from({ length: 5 }, (_, i) => ({ at: i * 0.02, typeId: "rf-quad" as const, bearing: 0 })),
+      stipend: 0,
+    };
+    let maxKillsInAStep = 0;
+    for (let i = 0; i < 4000; i++) {
+      const res = stepWave(rt, placed, wave, 1 / 60, rng, { spawnRadius: ENV.spawnRadius });
+      maxKillsInAStep = Math.max(maxKillsInAStep, res.kills.length);
+      if (res.waveComplete) break;
+    }
+    expect(maxKillsInAStep).toBe(1);
   });
 });
 

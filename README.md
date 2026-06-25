@@ -7,7 +7,7 @@ real branding, product names, model numbers, or performance figures. See
 [`CUAS_TRADESHOW_GAME_SPEC.md`](./CUAS_TRADESHOW_GAME_SPEC.md) for the full
 design intent — it is the source of truth.
 
-## Status — Phases 0–3
+## Status — Phases 0–4
 
 The build is sequenced so the slice proving the value proposition ships first
 (spec §14). Implemented so far:
@@ -60,6 +60,21 @@ brain unlock → Boss #2 (clean win) → side-by-side summary + conversion hando
   Balance is held by a headless analysis harness: coordinated play wins ~100% and
   scores far ahead; a sensor-less spread is punished by the adaptive enemy
   (~58%); clustered and passive play lose. All asserted as guardrail tests.
+
+- **Phase 4 — Tech gradient + escalation + finale.** The Bloons-style climb
+  (spec §7). Devices now carry their own combat stats, so:
+  - **Three tiers** unlock with the narrative — Tier 1 grounded (radar, RF-DF,
+    net, jammer) → Tier 2 near-future (AESA array, HPM area-emitter, laser) →
+    Tier 3 fictional (plasma cannon, beam array). Tier 2 opens after boss #1,
+    Tier 3 after boss #2.
+  - **Within-class upgrades** — tap a placed device for a short upgrade path
+    (range / fire-rate / effect / AOE), spending currency to deepen placements.
+  - **Area effectors** (HPM / plasma / beam) blast whole clusters at once — the
+    spectacle that pairs with the swarm finale.
+  - **Escalation finale** — waves scale up to a swarm overwhelm; the run ends on
+    a score (site held, or overrun).
+  The scoring guardrail holds at every tier: even with the fictional high-end,
+  coordinated play outscores brute-force spam (~5000 vs ~1400 in the harness).
 
 ### The teaching matchups (spec §6)
 
@@ -135,7 +150,8 @@ recommendations (Phase 3).
 
 ## Not yet built
 
-Phases 4–7: the Bloons-style tech gradient (near-future → fictional tiers) with
-within-class upgrades and the overwhelm finale, the persistent leaderboard +
-takeaway, additional sites, and booth hardening (attract mode, auto-reset,
-kiosk lock). See the spec for the full plan.
+Phases 5–7: the persistent leaderboard + takeaway artifact, additional sites
+(airport / energy / stadium, each with a new threat wrinkle), and booth
+hardening (attract/idle mode, auto-reset, kiosk fullscreen lock, the staff
+brain-toggle as a polished sales tool, performance pass). See the spec for the
+full plan.

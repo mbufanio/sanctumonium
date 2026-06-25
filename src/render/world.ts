@@ -22,7 +22,7 @@ import {
   type Hex,
   type Px,
 } from "../sim/hex.ts";
-import { SENSOR_TYPES } from "../sim/boss/data.ts";
+import { placeableById } from "../sim/realtime/catalog.ts";
 import type { Fx } from "../sim/realtime/types.ts";
 import type { GameState } from "../sim/state.ts";
 
@@ -196,7 +196,7 @@ export class WorldRenderer {
       seen.add(d.id);
       let t = this.labels.get(d.id);
       if (!t) {
-        const code = SENSOR_TYPES[d.placeableId as keyof typeof SENSOR_TYPES]?.code ?? labelCode(d.placeableId);
+        const code = placeableById(d.placeableId)?.code ?? labelCode(d.placeableId);
         t = new Text({
           text: code,
           style: { fontFamily: "monospace", fontSize: 10, fill: d.kind === "sensor" ? COLORS.coverage : COLORS.friendly, fontWeight: "700" },
@@ -236,7 +236,7 @@ export class WorldRenderer {
     const rt = state.rt;
     if (rt && rt.fx.length) {
       for (const fx of rt.fx) {
-        const ttl = fx.kind === "shot" ? 0.12 : fx.kind === "handoff" ? 0.22 : fx.kind === "kill" ? 0.3 : 0.4;
+        const ttl = fx.kind === "shot" ? 0.12 : fx.kind === "handoff" ? 0.22 : fx.kind === "aoe" ? 0.45 : fx.kind === "kill" ? 0.3 : 0.4;
         this.activeFx.push({ fx, age: 0, ttl });
       }
       rt.fx = [];
@@ -266,6 +266,15 @@ export class WorldRenderer {
         const from = planeToPixel(a.fx.from);
         const to = planeToPixel(a.fx.to);
         this.fxGfx.moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({ color: COLORS.brain, width: 1, alpha: 0.55 * k });
+      } else if (a.fx.kind === "aoe") {
+        // Area blast — an expanding, fading filled ring (the high-tier spectacle).
+        const at = planeToPixel(a.fx.at);
+        const col = aoeColor(a.fx.effector);
+        const rr = a.fx.radius * (0.5 + 0.5 * (1 - k));
+        this.fxGfx
+          .ellipse(at.x, at.y, rr, rr * ISO_SQUASH)
+          .fill({ color: col, alpha: 0.12 * k })
+          .stroke({ color: col, width: 2, alpha: 0.7 * k });
       }
     }
     this.activeFx = survivors;
@@ -305,6 +314,20 @@ export class WorldRenderer {
   /** Plane position helper exposed for callers that need world geometry. */
   planeOf(h: Hex): Px {
     return hexToPlane(h);
+  }
+}
+
+/** Spectacle colour for an area-blast by weapon (spec §7 — escalating wow). */
+function aoeColor(effector: string): number {
+  switch (effector) {
+    case "plasma":
+      return 0xff5cf0; // magenta plasma
+    case "beam":
+      return COLORS.brain; // cyan beam
+    case "hpm":
+      return 0x8be9ff; // pale microwave
+    default:
+      return COLORS.friendly;
   }
 }
 

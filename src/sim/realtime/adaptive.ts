@@ -25,10 +25,8 @@ import {
   type Hex,
   type Px,
 } from "../hex.ts";
-import { SENSOR_TYPES } from "../boss/data.ts";
 import { LEAK_RADIUS, placeableById } from "./catalog.ts";
 import type { PlacedDevice, WaveDef } from "./types.ts";
-import type { SensorTypeId } from "../boss/types.ts";
 
 const BINS = 24; // bearing buckets (15° each)
 
@@ -39,11 +37,8 @@ function pointAt(bearingDeg: number, r: number): Px {
 
 /** Is point `p` tracked by some sensor that can see a generic drone there? */
 function trackedAt(p: Px, sensors: PlacedDevice[]): boolean {
-  return sensors.some((s) => {
-    const sen = SENSOR_TYPES[s.placeableId as SensorTypeId];
-    // Use the best-case (rf-quad) trackability for a coverage estimate.
-    return sen.track["rf-quad"] > 0 && planeDist(s.pos, p) <= s.radius;
-  });
+  // Use the best-case (rf-quad) trackability for a coverage estimate.
+  return sensors.some((s) => s.track["rf-quad"] > 0 && planeDist(s.pos, p) <= s.radius);
 }
 
 /** Is point `p` inside some effector's reach? */

@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "../rng.ts";
-import { HEX_SIZE, hexKey, hexToPlane, ringDistance, type Hex } from "../hex.ts";
+import { HEX_SIZE, hexKey, ringDistance, type Hex } from "../hex.ts";
 import { LEVEL_1 } from "../level.ts";
+import { makePlaced } from "../state.ts";
 import { adaptWave, recommendPlacement, seamWeakness } from "./adaptive.ts";
-import { RANGE_SCALE } from "./catalog.ts";
 import type { PlacedDevice, WaveDef } from "./types.ts";
 
 const SPAWN_RADIUS = LEVEL_1.rings * HEX_SIZE * Math.sqrt(3) + HEX_SIZE * 1.5;
 
-function dev(kind: "sensor" | "effector", placeableId: string, hex: Hex): PlacedDevice {
-  const km = placeableId === "radar" ? 4 : placeableId === "rf-df" ? 3.2 : placeableId === "net-drone" ? 2.2 : 3.5;
-  return { id: hexKey(hex) + placeableId, kind, placeableId, hex, pos: hexToPlane(hex), radius: km * RANGE_SCALE, cooldown: 0 };
+function dev(_kind: "sensor" | "effector", placeableId: string, hex: Hex): PlacedDevice {
+  return makePlaced(placeableId, hex);
 }
 
 function bigWave(n: number): WaveDef {
