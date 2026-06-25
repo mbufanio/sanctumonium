@@ -1,0 +1,279 @@
+/**
+ * Boss minigame engine (spec §6) — the lesson core.
+ *
+ * Responsibilities:
+ *   • computeOdds      — explain a single threat's hit probability (legible).
+ *   • computeOptimal   — what the BRAIN recommends (best expected outcome).
+ *   • deconfliction    — the brain's warnings (untracked / ineffective / seam).
+ *   • resolveEncounter — roll the dice deterministically and report the result.
+ *
+ * Pure logic. Deterministic given an Rng. No rendering.
+ */
+import { Rng } from "../rng.ts";
+import {
+  EFFECTOR_TYPES,
+  SENSOR_TYPES,
+  THREAT_TYPES,
+} from "./data.ts";
+import type {
+  AssignmentMap,
+  BossConfig,
+  DeviceUnit,
+  EffectorType,
+  EncounterResult,
+  Odds,
+  OddsFactor,
+  SensorType,
+  ThreatResult,
+  ThreatUnit,
+} from "./types.ts";
+
+/** Multiplier applied to effectiveness when a threat is engaged but untracked. */
+const UNTRACKED_PENALTY = 0.35;
+
+function sensorType(u: DeviceUnit): SensorType {
+  return SENSOR_TYPES[u.typeId as keyof typeof SENSOR_TYPES];
+}
+function effectorType(u: DeviceUnit): EffectorType {
+  return EFFECTOR_TYPES[u.typeId as keyof typeof EFFECTOR_TYPES];
+}
+
+/** Range factor: full effect inside range, graceful falloff just beyond it. */
+function rangeFactor(range: number, distance: number): number {
+  if (distance <= range) return 1;
+  // Falls off over a 1km grace band, then zero.
+  const over = distance - range;
+  return Math.max(0, 1 - over / 1.0);
+}
+
+/**
+ * Explain the hit probability for one threat under a given (sensor, effector).
+ * Returns p plus the multiplicative factors and any warnings, so the UI can
+ * show the breakdown that makes the brain's pick feel insightful.
+ */
+export function computeOdds(
+  cfg: BossConfig,
+  threat: ThreatUnit,
+  sensorId: string | null,
+  effectorId: string | null,
+): Odds {
+  const factors: OddsFactor[] = [];
+  const warnings: string[] = [];
+  const tt = THREAT_TYPES[threat.typeId];
+
+  const effUnit = effectorId ? cfg.effectors.find((e) => e.id === effectorId) : null;
+  if (!effUnit) {
+    return {
+      threatId: threat.id,
+      p: 0,
+      factors: [{ label: "No effector assigned", mult: 0 }],
+      warnings: [`${threat.label} is unengaged — it will leak.`],
+      unengaged: true,
+    };
+  }
+
+  const eff = effectorType(effUnit);
+
+  // 1. Effector-vs-threat-type matchup (the headline factor).
+  const matchup = eff.effect[threat.typeId];
+  factors.push({ label: `${eff.name} vs ${tt.name}`, mult: matchup });
+  if (matchup <= 0.001) {
+    warnings.push(`${eff.name} has NO effect on a ${tt.name}.`);
+  }
+
+  // 2. Range to target.
+  const rf = rangeFactor(eff.range, threat.distance);
+  factors.push({ label: `Range (${threat.distance.toFixed(1)}km / ${eff.range}km)`, mult: rf });
+  if (rf <= 0.001) warnings.push(`${threat.label} is outside ${eff.name} range.`);
+
+  // 3. Tracking quality from the assigned sensor.
+  let trackMult = UNTRACKED_PENALTY;
+  if (sensorId) {
+    const senUnit = cfg.sensors.find((s) => s.id === sensorId);
+    if (senUnit) {
+      const sen = sensorType(senUnit);
+      const q = sen.track[threat.typeId];
+      const senRf = rangeFactor(sen.range, threat.distance);
+      if (q <= 0.001) {
+        warnings.push(`${sen.name} cannot track a ${tt.name}.`);
+        trackMult = UNTRACKED_PENALTY;
+      } else if (senRf <= 0.001) {
+        warnings.push(`${threat.label} is beyond ${sen.name} range — weak track.`);
+        trackMult = UNTRACKED_PENALTY;
+      } else {
+        // Tracking lifts effectiveness from the untracked floor toward 1.0.
+        trackMult = UNTRACKED_PENALTY + (1 - UNTRACKED_PENALTY) * q * senRf;
+      }
+    }
+  } else {
+    warnings.push(`${threat.label} is being engaged UNTRACKED — odds are poor.`);
+  }
+  factors.push({ label: sensorId ? "Track quality" : "No track (firing blind)", mult: trackMult });
+
+  const p = clamp01(factors.reduce((acc, f) => acc * f.mult, 1));
+  return { threatId: threat.id, p, factors, warnings, unengaged: false };
+}
+
+/** Compute odds for every threat under an assignment map. */
+export function computeAllOdds(cfg: BossConfig, map: AssignmentMap): Odds[] {
+  return cfg.threats.map((t) => {
+    const a = map[t.id] ?? { sensorId: null, effectorId: null };
+    return computeOdds(cfg, t, a.sensorId, a.effectorId);
+  });
+}
+
+/**
+ * Brain-on deconfliction warnings (spec §6.2 / §12 face 2). Surfaces:
+ *   • duplicate effector use (two threats sharing one effector → wasted),
+ *   • ineffective matchups, untracked engagements, and unengaged seams.
+ */
+export function deconfliction(cfg: BossConfig, map: AssignmentMap): string[] {
+  const msgs: string[] = [];
+  const effUse = new Map<string, string[]>();
+  const senUse = new Map<string, string[]>();
+
+  for (const t of cfg.threats) {
+    const a = map[t.id];
+    if (!a) continue;
+    if (a.effectorId) (effUse.get(a.effectorId) ?? effUse.set(a.effectorId, []).get(a.effectorId)!).push(t.label);
+    if (a.sensorId) (senUse.get(a.sensorId) ?? senUse.set(a.sensorId, []).get(a.sensorId)!).push(t.label);
+  }
+  for (const [eid, ts] of effUse) {
+    if (ts.length > 1) {
+      const e = cfg.effectors.find((x) => x.id === eid)!;
+      msgs.push(`${effectorType(e).name} double-tasked on ${ts.join(" & ")} — split it.`);
+    }
+  }
+  for (const [sid, ts] of senUse) {
+    if (ts.length > 1) {
+      const s = cfg.sensors.find((x) => x.id === sid)!;
+      msgs.push(`${sensorType(s).name} can't track ${ts.join(" & ")} at once.`);
+    }
+  }
+  return msgs;
+}
+
+/**
+ * Expected number of threats stopped under an assignment (sum of per-threat p).
+ * This is the objective the brain maximizes.
+ */
+export function expectedStopped(cfg: BossConfig, map: AssignmentMap): number {
+  return computeAllOdds(cfg, map).reduce((acc, o) => acc + o.p, 0);
+}
+
+/**
+ * Brute-force the optimal assignment (spec §6.2 — the brain's highlight).
+ *
+ * Each sensor and each effector is used at most once. The roster is tiny
+ * (≤4 threats, ≤4 of each device), so exhaustive search over effector and
+ * sensor permutations is instant and provably optimal. We maximize expected
+ * stopped, tie-breaking toward the worst-covered threat being as safe as
+ * possible (robustness), which matches how a good operator actually thinks.
+ */
+export function computeOptimal(cfg: BossConfig): AssignmentMap {
+  const threats = cfg.threats;
+  const effIds = cfg.effectors.map((e) => e.id);
+  const senIds = cfg.sensors.map((s) => s.id);
+
+  let best: AssignmentMap | null = null;
+  let bestScore = -1;
+  let bestMin = -1;
+
+  // Assign effectors first (the scarce, decisive resource), then sensors.
+  for (const effChoice of partialAssignments(threats.length, effIds)) {
+    for (const senChoice of partialAssignments(threats.length, senIds)) {
+      const map: AssignmentMap = {};
+      threats.forEach((t, i) => {
+        map[t.id] = { sensorId: senChoice[i], effectorId: effChoice[i] };
+      });
+      const odds = computeAllOdds(cfg, map);
+      const score = odds.reduce((a, o) => a + o.p, 0);
+      const minP = Math.min(...odds.map((o) => o.p));
+      if (score > bestScore + 1e-9 || (Math.abs(score - bestScore) < 1e-9 && minP > bestMin)) {
+        bestScore = score;
+        bestMin = minP;
+        best = map;
+      }
+    }
+  }
+  return best ?? emptyAssignment(cfg);
+}
+
+/**
+ * All ways to assign `slots` threats a distinct device from `ids` (or null).
+ * Yields arrays of length `slots`; each entry is an id or null (unengaged).
+ */
+function* partialAssignments(slots: number, ids: string[]): Generator<(string | null)[]> {
+  const used = new Set<string>();
+  const acc: (string | null)[] = [];
+  function* rec(i: number): Generator<(string | null)[]> {
+    if (i === slots) {
+      yield acc.slice();
+      return;
+    }
+    // Option: leave this threat without this device class.
+    acc.push(null);
+    yield* rec(i + 1);
+    acc.pop();
+    // Option: give it any not-yet-used device.
+    for (const id of ids) {
+      if (used.has(id)) continue;
+      used.add(id);
+      acc.push(id);
+      yield* rec(i + 1);
+      acc.pop();
+      used.delete(id);
+    }
+  }
+  yield* rec(0);
+}
+
+export function emptyAssignment(cfg: BossConfig): AssignmentMap {
+  const map: AssignmentMap = {};
+  for (const t of cfg.threats) map[t.id] = { sensorId: null, effectorId: null };
+  return map;
+}
+
+/**
+ * Resolve the encounter: roll each threat against its hit probability.
+ * Deterministic given the Rng. Honors allowLoss=false by flooring a losing
+ * outcome to a narrow win (spec §6.1/§13 — never knock out a cold booth player).
+ */
+export function resolveEncounter(
+  cfg: BossConfig,
+  map: AssignmentMap,
+  rng: Rng,
+): EncounterResult {
+  const odds = computeAllOdds(cfg, map);
+  const results: ThreatResult[] = odds.map((o) => ({
+    threatId: o.threatId,
+    p: o.p,
+    stopped: rng.chance(o.p),
+  }));
+
+  let stopped = results.filter((r) => r.stopped).length;
+  let leaked = results.length - stopped;
+  let rescued = false;
+  let won = leaked <= cfg.leakTolerance;
+
+  if (!won && !cfg.allowLoss) {
+    // Rescue the weakest leak so the player narrowly survives.
+    const leakedSorted = results
+      .filter((r) => !r.stopped)
+      .sort((a, b) => b.p - a.p); // flip the most-likely-to-have-hit first
+    while (leaked > cfg.leakTolerance && leakedSorted.length) {
+      const r = leakedSorted.shift()!;
+      r.stopped = true;
+      stopped++;
+      leaked--;
+      rescued = true;
+    }
+    won = true;
+  }
+
+  return { results, stopped, leaked, won, rescued };
+}
+
+function clamp01(x: number): number {
+  return x < 0 ? 0 : x > 1 ? 1 : x;
+}
