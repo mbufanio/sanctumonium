@@ -1,14 +1,23 @@
 /**
  * Pixi world renderer (spec §3/§4) — the stylized 2.5D isometric site.
  *
- * Phase 0: draws the military-facility ground grid, the protected asset with a
- * slow command-radar sweep, and a subtle vignette. It reads from GameState and
- * never mutates it. The interactive boss console is a DOM/SVG overlay on top
- * (see ui/bossConsole.ts) — this layer is the atmospheric world behind it.
+ * Revised architecture: the defended asset sits at the CENTER of a hexagonal
+ * field and the playfield radiates 360° around it. This layer draws the hex
+ * ground, the centred protected asset, concentric coverage rings, and a slow
+ * command-radar sweep. It reads from GameState and never mutates it. The
+ * interactive boss console is a DOM/SVG overlay on top (ui/bossConsole.ts).
  */
 import { Application, Container, Graphics } from "pixi.js";
 import { COLORS } from "../theme.ts";
-import { TILE_H, TILE_W, worldToScreen, type WorldPoint } from "../sim/iso.ts";
+import {
+  HEX_SIZE,
+  ISO_SQUASH,
+  hexCorners,
+  hexToPixel,
+  hexesWithin,
+  ringDistance,
+  type Hex,
+} from "../sim/hex.ts";
 import type { GameState } from "../sim/state.ts";
 
 export class WorldRenderer {
@@ -16,8 +25,8 @@ export class WorldRenderer {
   private world = new Container();
   private ground = new Graphics();
   private assetGfx = new Graphics();
+  private rings = new Graphics();
   private sweep = new Graphics();
-  private vignette = new Graphics();
   private mounted = false;
 
   constructor() {
@@ -34,90 +43,86 @@ export class WorldRenderer {
     });
     host.appendChild(this.app.canvas);
     this.app.stage.addChild(this.world);
-    this.world.addChild(this.ground, this.assetGfx, this.sweep);
-    this.app.stage.addChild(this.vignette);
+    this.world.addChild(this.ground, this.rings, this.assetGfx, this.sweep);
     this.mounted = true;
     this.layout();
     window.addEventListener("resize", () => this.layout());
   }
 
-  /** Center the iso world and draw the static ground for the current level. */
+  /** Center the hex field on screen (origin hex = screen centre). */
   private layout(): void {
     if (!this.mounted) return;
     const { width, height } = this.app.screen;
-    // Center the world container; level origin sits at canvas middle-top-ish.
-    this.world.position.set(width / 2, height / 2 - 40);
-    this.drawVignette(width, height);
+    this.world.position.set(width / 2, height / 2);
   }
 
   drawStatic(state: GameState): void {
     const lvl = state.level;
     this.ground.clear();
 
-    // Iso ground diamond grid.
-    for (let gx = 0; gx < lvl.cols; gx++) {
-      for (let gy = 0; gy < lvl.rows; gy++) {
-        const center = this.tileCenter(lvl.cols, lvl.rows, { gx, gy });
-        const checker = (gx + gy) % 2 === 0;
-        this.diamond(this.ground, center.x, center.y, checker ? COLORS.groundFill : COLORS.groundLight, COLORS.groundLine);
-      }
+    // Hex ground, banded by ring so the 360° concentric structure reads.
+    for (const h of hexesWithin(lvl.rings)) {
+      const c = hexToPixel(h);
+      const d = ringDistance(h);
+      const band = d % 2 === 0 ? COLORS.groundFill : COLORS.groundLight;
+      this.hexTile(this.ground, c, band, COLORS.groundLine);
     }
 
-    // Protected asset (spec §3 — clear, distinct, the thing you defend).
+    // Protected asset, dead centre.
     this.assetGfx.clear();
-    for (const a of lvl.assets) {
-      const c = this.tileCenter(lvl.cols, lvl.rows, a.pos);
-      // Footprint ring.
-      this.assetGfx
-        .circle(c.x, c.y, a.radius * TILE_W * 0.5)
-        .stroke({ color: COLORS.asset, width: 2, alpha: 0.4 });
-      // Stylized command building (stacked iso block).
-      this.isoBlock(this.assetGfx, c.x, c.y, 1.1, 26, COLORS.friendlyDim, COLORS.friendly);
-      this.assetGfx.circle(c.x, c.y - 30, 4).fill(COLORS.assetCore);
-    }
+    const ac = hexToPixel(lvl.asset.pos);
+    this.assetGfx
+      .circle(ac.x, ac.y, lvl.asset.radius * HEX_SIZE * 1.5)
+      .stroke({ color: COLORS.asset, width: 2, alpha: 0.35 });
+    this.isoBlock(this.assetGfx, ac.x, ac.y, 1.0, 30, COLORS.friendlyDim, COLORS.friendly);
+    this.assetGfx.circle(ac.x, ac.y - 34, 4).fill(COLORS.assetCore);
   }
 
-  /** Animate the slow radar sweep over the asset. */
+  /** Animate the concentric coverage rings + slow radar sweep over the asset. */
   update(state: GameState): void {
     if (!this.mounted) return;
     const lvl = state.level;
-    const a = lvl.assets[0];
-    if (!a) return;
-    const c = this.tileCenter(lvl.cols, lvl.rows, a.pos);
-    const r = 5 * TILE_W * 0.5;
-    const ang = state.time * 0.8;
+    const c = hexToPixel(lvl.asset.pos);
+
+    // Faint concentric coverage rings (polar-plot feel, spec §3).
+    this.rings.clear();
+    for (let ring = 2; ring <= lvl.rings; ring += 2) {
+      const rad = ring * HEX_SIZE * 1.5;
+      this.ring(this.rings, c.x, c.y, rad, COLORS.coverage, 0.1);
+    }
+
+    // Sweeping wedge over the whole field.
+    const r = lvl.rings * HEX_SIZE * 1.5;
+    const ang = state.time * 0.7;
     this.sweep.clear();
-    // Faint coverage circle (polar-plot feel, spec §3).
-    this.sweep.circle(c.x, c.y, r).stroke({ color: COLORS.coverage, width: 1, alpha: 0.18 });
-    // Sweeping wedge.
     this.sweep
       .moveTo(c.x, c.y)
-      .arc(c.x, c.y, r, ang, ang + 0.5)
+      .arc(c.x, c.y, r, ang, ang + 0.45)
       .lineTo(c.x, c.y)
-      .fill({ color: COLORS.coverage, alpha: 0.1 });
+      .fill({ color: COLORS.coverage, alpha: 0.08 });
+    this.sweep.scale.set(1, ISO_SQUASH);
+    this.sweep.position.set(0, c.y * (1 - ISO_SQUASH));
   }
 
-  /** Convert a level tile to centered screen coords within the world container. */
-  private tileCenter(cols: number, rows: number, p: WorldPoint): { x: number; y: number } {
-    const s = worldToScreen(p);
-    // Offset so the grid is centered on the world origin.
-    const o = worldToScreen({ gx: (cols - 1) / 2, gy: (rows - 1) / 2 });
-    return { x: s.x - o.x, y: s.y - o.y };
+  // ---- primitives --------------------------------------------------------
+
+  private hexTile(g: Graphics, c: { x: number; y: number }, fill: number, line: number): void {
+    const pts = hexCorners(c);
+    g.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
+    g.closePath()
+      .fill({ color: fill, alpha: 0.92 })
+      .stroke({ color: line, width: 1, alpha: 0.4 });
   }
 
-  private diamond(g: Graphics, x: number, y: number, fill: number, line: number): void {
-    g.moveTo(x, y - TILE_H / 2)
-      .lineTo(x + TILE_W / 2, y)
-      .lineTo(x, y + TILE_H / 2)
-      .lineTo(x - TILE_W / 2, y)
-      .closePath()
-      .fill({ color: fill, alpha: 0.9 })
-      .stroke({ color: line, width: 1, alpha: 0.5 });
+  /** A flattened (iso-squashed) circle for the radial coverage rings. */
+  private ring(g: Graphics, x: number, y: number, radius: number, color: number, alpha: number): void {
+    g.ellipse(x, y, radius, radius * ISO_SQUASH).stroke({ color, width: 1, alpha });
   }
 
   private isoBlock(g: Graphics, x: number, y: number, scale: number, h: number, side: number, top: number): void {
-    const hw = (TILE_W / 2) * scale;
-    const hh = (TILE_H / 2) * scale;
+    const hw = HEX_SIZE * 0.7 * scale;
+    const hh = HEX_SIZE * 0.7 * ISO_SQUASH * scale;
     // Left face.
     g.moveTo(x - hw, y).lineTo(x, y + hh).lineTo(x, y + hh - h).lineTo(x - hw, y - h).closePath().fill({ color: side, alpha: 0.85 });
     // Right face.
@@ -126,11 +131,9 @@ export class WorldRenderer {
     g.moveTo(x, y - hh - h).lineTo(x + hw, y - h).lineTo(x, y + hh - h).lineTo(x - hw, y - h).closePath().fill({ color: top, alpha: 0.95 });
   }
 
-  private drawVignette(w: number, h: number): void {
-    this.vignette.clear();
-    this.vignette.rect(0, 0, w, h).fill({ color: COLORS.bgBottom, alpha: 0 });
-    // Darkened corners via four soft rects (cheap vignette).
-    const band = Math.min(w, h) * 0.28;
-    this.vignette.rect(0, 0, w, band).fill({ color: COLORS.bgBottom, alpha: 0.0 });
+  /** Exposed for later phases that need to place sprites on the hex field. */
+  hexToScreen(h: Hex): { x: number; y: number } {
+    const p = hexToPixel(h);
+    return { x: this.world.x + p.x, y: this.world.y + p.y };
   }
 }

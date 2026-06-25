@@ -12,8 +12,9 @@ design intent — it is the source of truth.
 The build is sequenced so the slice proving the value proposition ships first
 (spec §14). Implemented so far:
 
-- **Phase 0 — Skeleton.** PixiJS isometric world (military facility + protected
-  asset with a radar sweep), fixed-timestep sim loop, a single authoritative
+- **Phase 0 — Skeleton.** PixiJS isometric world — a hexagonal field with the
+  protected asset at the CENTER and play radiating 360° around it (concentric
+  coverage rings + a radar sweep), fixed-timestep sim loop, a single authoritative
   TypeScript state object, HTML/CSS overlays, touch + mouse input, landscape
   responsive scaling.
 - **Phase 1 — The boss assignment minigame (THE PROOF).** The stripped
@@ -69,7 +70,7 @@ testable headless (spec §4).
 src/
   sim/                 # pure TypeScript — no Pixi, deterministic
     rng.ts             # seedable PRNG (fair, reproducible scoring)
-    iso.ts             # isometric projection math
+    hex.ts             # hexagonal grid math (axial coords, asset-centred 360°)
     level.ts           # site/level data (Level 1 = military facility)
     state.ts           # the single authoritative game-state + phase machine
     boss/

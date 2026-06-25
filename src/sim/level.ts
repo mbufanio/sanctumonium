@@ -1,34 +1,33 @@
 /**
  * Level / site definitions (spec §9). Levels are DATA over one engine so new
- * sites are cheap. Phase 0 ships Level 1 — the military facility — as the lead.
+ * sites are cheap. Phase 0/1 ships Level 1 — the military facility — as the
+ * lead. Revised architecture: the defended asset sits at the CENTER of a
+ * hexagonal field and play happens 360° around it.
  */
-import type { WorldPoint } from "./iso.ts";
+import type { Hex } from "./hex.ts";
 
 export interface AssetDef {
   id: string;
   name: string;
-  pos: WorldPoint;
-  /** Footprint radius in tiles, for the protected-asset ring. */
+  /** The protected asset is always centred at the origin. */
+  pos: Hex;
+  /** Footprint radius in rings, for the protected-asset ring. */
   radius: number;
 }
 
 export interface LevelDef {
   id: string;
   name: string;
-  /** Grid size in tiles. */
-  cols: number;
-  rows: number;
-  assets: AssetDef[];
-  /** Tile coords that read as the perimeter / approach corridors (cosmetic). */
-  perimeter: WorldPoint[];
+  /** Number of hex rings from the centre to the field edge. */
+  rings: number;
+  /** The single centred asset to defend (spec: asset in the middle, 360°). */
+  asset: AssetDef;
 }
 
 /** Level 1 — Military facility (BUILD FIRST, the lead — spec §9). */
 export const LEVEL_1: LevelDef = {
   id: "mil-facility",
   name: "Forward Operating Base",
-  cols: 14,
-  rows: 14,
-  assets: [{ id: "command", name: "Command Post", pos: { gx: 7, gy: 7 }, radius: 2 }],
-  perimeter: [],
+  rings: 6,
+  asset: { id: "command", name: "Command Post", pos: { q: 0, r: 0 }, radius: 1 },
 };
