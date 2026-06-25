@@ -22,6 +22,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Pages isn't served for private repos on free plans, so skip cleanly while
+    # the repo is private (during development) instead of failing every push.
+    # Manual dispatch always runs so it can be forced when the repo is public.
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.repository.private }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

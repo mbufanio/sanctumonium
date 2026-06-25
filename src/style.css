@@ -344,7 +344,7 @@ body {
 .device-btn {
   pointer-events: auto;
   cursor: pointer;
-  min-height: 56px;
+  min-height: 60px;
   text-align: left;
   background: var(--panel);
   border: 1px solid var(--panel-edge);
@@ -352,20 +352,50 @@ body {
   padding: 0.5rem 0.6rem;
   color: var(--text);
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   grid-template-rows: auto auto;
-  column-gap: 0.5rem;
+  column-gap: 0.55rem;
   align-items: center;
   transition: border-color 0.12s ease, transform 0.08s ease, opacity 0.12s ease;
 }
 .device-btn:disabled { opacity: 0.4; cursor: default; }
 .device-btn:not(:disabled):active { transform: scale(0.98); }
 .device-btn.active { border-color: var(--friendly); box-shadow: 0 0 0 1px var(--friendly), 0 0 16px rgba(79, 195, 247, 0.25); }
-.device-btn.busy { opacity: 0.6; }
-.dev-icon { grid-row: 1 / 3; font-family: var(--mono); font-size: 1.1rem; color: var(--coverage); }
-.dev-name { font-weight: 700; font-size: 0.92rem; }
-.dev-rng { font-size: 0.76rem; color: var(--text-dim); }
-.dev-used { font-size: 0.76rem; color: var(--brain-gold); }
+.device-btn.busy { opacity: 0.62; }
+.dev-code {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: center;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--coverage);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  padding: 0.25rem 0.35rem;
+  min-width: 3.6em;
+  text-align: center;
+}
+.device-row:last-of-type .dev-code { color: var(--friendly); }
+.dev-name { grid-column: 2; grid-row: 1; font-weight: 700; font-size: 0.9rem; }
+.dev-role { grid-column: 2; grid-row: 2; font-size: 0.72rem; color: var(--text-dim); line-height: 1.25; }
+.dev-rng { grid-column: 3; grid-row: 2; justify-self: end; font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); }
+.dev-used { grid-column: 3; grid-row: 2; justify-self: end; font-size: 0.72rem; color: var(--brain-gold); }
+.dev-pred {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 6px;
+}
+.dev-pred.hidden { color: var(--text-dim); }
+.dev-pred.good { color: var(--good); }
+.dev-pred.mid { color: var(--mid); }
+.dev-pred.bad { color: var(--bad); }
 
 /* brain panel */
 .brain-panel {

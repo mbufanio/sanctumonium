@@ -24,18 +24,21 @@ export const THREAT_TYPES: Record<ThreatTypeId, ThreatType> = {
   "rf-quad": {
     id: "rf-quad",
     name: "RF Quadcopter",
+    code: "RF",
     blurb: "Radio-controlled. Trackable and jammable — the textbook target.",
-    icon: "✕",
+    icon: "✚",
   },
   autonomy: {
     id: "autonomy",
     name: "Autonomy Drone",
+    code: "AUTO",
     blurb: "Flies pre-programmed. Ignores RF — jammers do NOTHING to it.",
     icon: "◆",
   },
   "low-observable": {
     id: "low-observable",
     name: "Low-Observable",
+    code: "STEALTH",
     blurb: "Tiny radar signature. Radar barely sees it; RF-DF tracks it best.",
     icon: "▲",
   },
@@ -45,14 +48,18 @@ export const SENSOR_TYPES: Record<SensorTypeId, SensorType> = {
   radar: {
     id: "radar",
     name: "Radar",
-    icon: "((•))",
+    code: "RADAR",
+    icon: "📡",
+    role: "Detects & tracks drones by radar return.",
     range: 4.0,
     track: { "rf-quad": 0.95, autonomy: 0.95, "low-observable": 0.4 },
   },
   "rf-df": {
     id: "rf-df",
     name: "RF Direction-Finder",
-    icon: "≈",
+    code: "RF-DF",
+    icon: "🛰",
+    role: "Locates drones by their radio emissions.",
     range: 3.2,
     // No RF emissions from an autonomy drone → cannot be tracked at all.
     track: { "rf-quad": 1.0, autonomy: 0.0, "low-observable": 0.92 },
@@ -63,7 +70,9 @@ export const EFFECTOR_TYPES: Record<EffectorTypeId, EffectorType> = {
   "net-drone": {
     id: "net-drone",
     name: "Net-Drone",
-    icon: "⊕",
+    code: "NET",
+    icon: "🕸",
+    role: "Captures a drone with a launched net.",
     range: 2.2,
     // Reliable generalist soft-kill, but short-ranged.
     effect: { "rf-quad": 0.88, autonomy: 0.88, "low-observable": 0.86 },
@@ -71,7 +80,9 @@ export const EFFECTOR_TYPES: Record<EffectorTypeId, EffectorType> = {
   "rf-jammer": {
     id: "rf-jammer",
     name: "RF Jammer",
-    icon: ")))",
+    code: "JAMMER",
+    icon: "📶",
+    role: "Severs a drone's radio control link.",
     range: 3.5,
     // Devastating vs RF control, useless vs autonomy, solid vs RF low-observable.
     effect: { "rf-quad": 0.95, autonomy: 0.0, "low-observable": 0.7 },

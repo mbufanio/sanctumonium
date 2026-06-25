@@ -13,11 +13,7 @@
  * on each change (the roster is tiny, so this is simple and fast).
  */
 import { COLORS, css, rgba } from "../theme.ts";
-import {
-  computeOdds,
-  deconfliction,
-  expectedStopped,
-} from "../sim/boss/engine.ts";
+import { computeOdds, expectedStopped } from "../sim/boss/engine.ts";
 import { EFFECTOR_TYPES, SENSOR_TYPES, THREAT_TYPES } from "../sim/boss/data.ts";
 import type { DeviceUnit, ThreatUnit } from "../sim/boss/types.ts";
 import type { BossSession } from "../sim/state.ts";
@@ -116,16 +112,21 @@ export class BossConsole {
     this.dot(svg, cx, cy, 3.2, COLORS.asset, COLORS.assetCore);
     this.label(svg, cx, cy + 6.5, "ASSET", COLORS.textDim, 2.6);
 
-    // Devices.
+    // Devices. Sensors = teal circles, effectors = blue squares — distinct
+    // shapes plus a short code tag so each one is identifiable at a glance.
     for (const d of [...s.cfg.sensors, ...s.cfg.effectors]) {
       const p = devPos(d);
       const isSensor = d.id.startsWith("s-");
       const type = isSensor ? SENSOR_TYPES[d.typeId as keyof typeof SENSOR_TYPES] : EFFECTOR_TYPES[d.typeId as keyof typeof EFFECTOR_TYPES];
-      this.dot(svg, p.x, p.y, 2.0, isSensor ? COLORS.friendlyDim : COLORS.friendly, COLORS.text);
-      this.label(svg, p.x, p.y - 2.8, type.icon, isSensor ? COLORS.coverage : COLORS.friendly, 2.2);
+      const color = isSensor ? COLORS.coverage : COLORS.friendly;
+      if (isSensor) this.dot(svg, p.x, p.y, 1.9, COLORS.panel, color);
+      else this.square(svg, p.x, p.y, 3.4, COLORS.panel, color);
+      // Code tag, offset outward from the asset so it never sits on the dot.
+      const out = p.y < cy ? -3.0 : 3.4;
+      this.label(svg, p.x, p.y + out, type.code, color, 2.1);
     }
 
-    // Threats.
+    // Threats. Red triangles + a type code so the matchup is readable.
     for (const t of s.cfg.threats) {
       const p = threatPos(t);
       const sel = s.selectedThreatId === t.id;
@@ -134,15 +135,15 @@ export class BossConsole {
         const ring = document.createElementNS(NS, "circle");
         ring.setAttribute("cx", String(p.x));
         ring.setAttribute("cy", String(p.y));
-        ring.setAttribute("r", "4.2");
+        ring.setAttribute("r", "4.6");
         ring.setAttribute("fill", "none");
         ring.setAttribute("stroke", css(COLORS.brainGold));
-        ring.setAttribute("stroke-width", "0.6");
+        ring.setAttribute("stroke-width", "0.7");
         svg.append(ring);
       }
-      this.dot(svg, p.x, p.y, 2.6, COLORS.threatDeep, COLORS.threat);
-      this.label(svg, p.x, p.y + 0.9, tt.icon, COLORS.threatTrack, 2.8);
-      this.label(svg, p.x, p.y - 3.4, t.label, COLORS.threatTrack, 2.2);
+      this.triangle(svg, p.x, p.y, 3.0, COLORS.threatDeep, COLORS.threat);
+      this.label(svg, p.x, p.y - 3.6, t.label, COLORS.threatTrack, 2.1);
+      this.label(svg, p.x, p.y + 4.0, tt.code, COLORS.threat, 2.1);
     }
 
     return svg;
@@ -169,16 +170,9 @@ export class BossConsole {
       const sub = el("div", "chip-sub");
       sub.textContent = tt.name;
       chip.append(top, badge, sub);
-
-      // Brain-on: a tiny note for the headline reason (teach the matchup).
-      if (s.brain && odds.warnings.length) {
-        const warn = el("div", "chip-warn");
-        warn.textContent = "⚠ " + odds.warnings[0];
-        chip.append(warn);
-      }
       threats.append(chip);
     }
-    wrap.append(this.sectionLabel("INCOMING — tap a threat, then assign a sensor + effector"), threats);
+    wrap.append(this.sectionLabel("Incoming"), threats);
 
     // Selected-threat assignment trays.
     const sel = s.selectedThreatId ? s.cfg.threats.find((t) => t.id === s.selectedThreatId) ?? null : null;
@@ -193,7 +187,7 @@ export class BossConsole {
   private deviceTray(s: BossSession, sel: ThreatUnit | null, kind: "sensor" | "effector"): HTMLElement {
     const tray = el("div", "device-tray");
     const list = kind === "sensor" ? s.cfg.sensors : s.cfg.effectors;
-    tray.append(this.sectionLabel(kind === "sensor" ? "SENSORS (track)" : "EFFECTORS (engage)"));
+    tray.append(this.sectionLabel(kind === "sensor" ? "Sensors" : "Effectors"));
     const row = el("div", "device-row");
     for (const d of list) {
       const type = kind === "sensor" ? SENSOR_TYPES[d.typeId as keyof typeof SENSOR_TYPES] : EFFECTOR_TYPES[d.typeId as keyof typeof EFFECTOR_TYPES];
@@ -208,9 +202,34 @@ export class BossConsole {
       const btn = el("button", "device-btn" + (assignedToSel ? " active" : "") + (usedBy && !assignedToSel ? " busy" : "")) as HTMLButtonElement;
       btn.disabled = !sel;
       btn.onclick = () => (kind === "sensor" ? this.cb.onAssignSensor(d.id) : this.cb.onAssignEffector(d.id));
+
+      // VATS-style pre-commit prediction: with the brain on, show the success
+      // % this device WOULD give the selected threat if chosen — computed
+      // against the threat's other current assignment. The 0% on a bad matchup
+      // (e.g. jammer vs an autonomy drone) teaches the lesson without words.
+      let preview = "";
+      if (s.brain && sel) {
+        const cur = s.map[sel.id] ?? { sensorId: null, effectorId: null };
+        const odds =
+          kind === "sensor"
+            ? computeOdds(s.cfg, sel, d.id, cur.effectorId)
+            : computeOdds(s.cfg, sel, cur.sensorId, d.id);
+        // A sensor's value only shows once an effector is firing; otherwise "—".
+        const showable = kind === "effector" || cur.effectorId;
+        const cls = showable ? oddsClass(odds.p, false, true) : "hidden";
+        const txt = showable ? pct(odds.p) : "—";
+        preview = `<span class="dev-pred ${cls}">${txt}</span>`;
+      }
+
+      const right = usedBy
+        ? `<span class="dev-used">→ ${usedBy}</span>`
+        : `<span class="dev-rng">${type.range} km</span>`;
       btn.innerHTML =
-        `<span class="dev-icon">${type.icon}</span><span class="dev-name">${type.name}</span>` +
-        (usedBy ? `<span class="dev-used">→ ${usedBy}</span>` : `<span class="dev-rng">${type.range}km</span>`);
+        `<span class="dev-code">${type.code}</span>` +
+        `<span class="dev-name">${type.name}</span>` +
+        `<span class="dev-role">${type.role}</span>` +
+        right +
+        preview;
       row.append(btn);
     }
     tray.append(row);
@@ -219,30 +238,22 @@ export class BossConsole {
 
   private brainPanel(s: BossSession): HTMLElement {
     const p = el("div", "brain-panel");
-    const warns = deconfliction(s.cfg, s.map);
     const head = el("div", "brain-head");
-    head.innerHTML = `<span class="brain-dot">◈</span> COORDINATION BRAIN`;
+    head.innerHTML = `<span class="brain-dot">◈</span> Coordination`;
     p.append(head);
 
     const exp = expectedStopped(s.cfg, s.map);
     const optExp = s.optimal ? expectedStopped(s.cfg, s.optimal) : exp;
     const stat = el("div", "brain-stat");
     stat.innerHTML =
-      `Projected stops: <b>${exp.toFixed(2)}</b> / ${s.cfg.threats.length}` +
-      (optExp > exp + 0.01 ? ` &nbsp;·&nbsp; <span class="brain-opt-hint">optimal: ${optExp.toFixed(2)}</span>` : ` &nbsp;·&nbsp; <span class="brain-ok">optimal</span>`);
+      `Projected: <b>${exp.toFixed(1)}</b> / ${s.cfg.threats.length} stopped` +
+      (optExp > exp + 0.05
+        ? ` &nbsp;·&nbsp; <span class="brain-opt-hint">best plan: ${optExp.toFixed(1)}</span>`
+        : ` &nbsp;·&nbsp; <span class="brain-ok">optimal</span>`);
     p.append(stat);
 
-    if (warns.length) {
-      const w = el("div", "brain-warns");
-      for (const m of warns) {
-        const li = el("div", "brain-warn");
-        li.textContent = "⚠ " + m;
-        w.append(li);
-      }
-      p.append(w);
-    }
     const apply = el("button", "brain-apply");
-    apply.textContent = "◈ Apply Brain's Optimal Plan";
+    apply.textContent = "◈ Apply optimal plan";
     apply.onclick = () => this.cb.onApplyOptimal();
     p.append(apply);
     return p;
@@ -283,9 +294,7 @@ export class BossConsole {
     wrap.append(tally);
 
     const sub = el("div", "result-sub");
-    sub.textContent = s.brain
-      ? "Same hardware. Same threats. The brain made every shot count."
-      : "You held — barely. The systems weren't talking to each other.";
+    sub.textContent = s.brain ? "Every shot pre-checked." : "Odds hidden. Outcome left to chance.";
     wrap.append(sub);
 
     const cont = el("button", "btn-continue");
@@ -329,8 +338,32 @@ export class BossConsole {
     c.setAttribute("r", String(r));
     c.setAttribute("fill", css(fill));
     c.setAttribute("stroke", css(stroke));
-    c.setAttribute("stroke-width", "0.4");
+    c.setAttribute("stroke-width", "0.6");
     svg.append(c);
+  }
+
+  private square(svg: SVGSVGElement, x: number, y: number, size: number, fill: number, stroke: number): void {
+    const r = document.createElementNS(NS, "rect");
+    r.setAttribute("x", String(x - size / 2));
+    r.setAttribute("y", String(y - size / 2));
+    r.setAttribute("width", String(size));
+    r.setAttribute("height", String(size));
+    r.setAttribute("rx", "0.6");
+    r.setAttribute("fill", css(fill));
+    r.setAttribute("stroke", css(stroke));
+    r.setAttribute("stroke-width", "0.6");
+    svg.append(r);
+  }
+
+  private triangle(svg: SVGSVGElement, x: number, y: number, size: number, fill: number, stroke: number): void {
+    const h = size;
+    const pts = `${x},${y - h} ${x + h * 0.9},${y + h * 0.7} ${x - h * 0.9},${y + h * 0.7}`;
+    const t = document.createElementNS(NS, "polygon");
+    t.setAttribute("points", pts);
+    t.setAttribute("fill", css(fill));
+    t.setAttribute("stroke", css(stroke));
+    t.setAttribute("stroke-width", "0.6");
+    svg.append(t);
   }
 
   private label(svg: SVGSVGElement, x: number, y: number, text: string, color: number, size: number): void {

@@ -26,16 +26,15 @@ export class Screens {
     this.clear();
     const s = screen("title-screen");
     s.innerHTML = `
-      <div class="screen-kicker">COUNTER-UAS · COMMAND DEMONSTRATION</div>
-      <h1 class="screen-h1">It isn't how many devices you have.</h1>
-      <h2 class="screen-h2">It's the <span class="accent">brain</span> coordinating them.</h2>
+      <div class="screen-kicker">COUNTER-UAS · LIVE DEFENSE</div>
+      <h1 class="screen-h1">Hostile drones inbound.</h1>
+      <h2 class="screen-h2">Match the right sensor and effector to each threat.</h2>
       <p class="screen-body">
-        A coordinated drone strike is inbound on your facility. Assign your
-        sensors and effectors to stop it — first on your own, then with the
-        coordination system online. Feel the difference.
+        A coordinated strike is closing on the site. Track each drone and pick
+        the effector that beats it — before it reaches the asset.
       </p>
     `;
-    const btn = button("Begin the defense", "screen-cta");
+    const btn = button("Begin", "screen-cta");
     btn.onclick = () => this.cb.onStart();
     s.append(btn);
     this.root.append(s);
@@ -46,18 +45,17 @@ export class Screens {
     this.clear();
     const s = screen("unlock-screen");
     s.innerHTML = `
-      <div class="op-line op-1">"We held — but only just. The post is hurt."</div>
-      <div class="op-line op-2">"Our systems aren't talking to each other.
-        Radars, jammers, nets — all fighting alone."</div>
-      <div class="op-line op-3">"We need them <em>coordinated</em>. Bringing the
-        coordination brain online now."</div>
+      <div class="op-line op-1">"We held. Barely."</div>
+      <div class="op-line op-2">"Patch the units into the coordination layer —
+        let them share tracks and call their shots together."</div>
+      <div class="op-line op-3">"Coordination online. Re-engage."</div>
       <div class="brain-boot">
         <div class="boot-ring"></div>
-        <div class="boot-label">◈ COORDINATION SYSTEM ONLINE</div>
-        <div class="boot-sub">Tracks shared · Fire deconflicted · Odds visible · Seams flagged</div>
+        <div class="boot-label">◈ COORDINATION ONLINE</div>
+        <div class="boot-sub">Shared tracks · deconflicted fire · live hit odds</div>
       </div>
     `;
-    const btn = button("Re-engage — same threat, smarter defense", "screen-cta accent-cta");
+    const btn = button("Re-engage", "screen-cta accent-cta");
     btn.onclick = () => this.cb.onUnlockContinue();
     s.append(btn);
     this.root.append(s);
@@ -67,24 +65,21 @@ export class Screens {
     this.clear();
     const s = screen("summary-screen");
     s.innerHTML = `
-      <div class="screen-kicker">DEMONSTRATION COMPLETE</div>
-      <h1 class="screen-h1">Same hardware. Two different outcomes.</h1>
+      <div class="screen-kicker">DEFENSE COMPLETE</div>
+      <h1 class="screen-h1">Two runs. Same hardware.</h1>
       <div class="compare">
         <div class="compare-col off">
-          <div class="compare-h">WITHOUT THE BRAIN</div>
+          <div class="compare-h">MANUAL</div>
           <div class="compare-v">${brain1}</div>
-          <div class="compare-note">Blind odds · wasted shots · barely held</div>
+          <div class="compare-note">Odds hidden</div>
         </div>
         <div class="compare-col on">
-          <div class="compare-h">WITH THE BRAIN</div>
+          <div class="compare-h">COORDINATED</div>
           <div class="compare-v">${brain2}</div>
-          <div class="compare-note">Visible odds · optimal assignment · clean win</div>
+          <div class="compare-note">Odds visible · fire deconflicted</div>
         </div>
       </div>
-      <p class="screen-body">
-        The coordinating intelligence is real. Ask our team to show you the
-        actual model behind it.
-      </p>
+      <p class="screen-body">Ask the team about the system behind it.</p>
     `;
     const btn = button("Run it again", "screen-cta");
     btn.onclick = () => this.cb.onRestart();

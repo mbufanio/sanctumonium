@@ -21,6 +21,8 @@ export type EffectorTypeId = "net-drone" | "rf-jammer";
 export interface ThreatType {
   id: ThreatTypeId;
   name: string;
+  /** Short uppercase tag shown on the scope (e.g. "RF", "AUTO", "STEALTH"). */
+  code: string;
   /** One-line "why it's tricky" shown to the player so matchups are learnable. */
   blurb: string;
   icon: string;
@@ -29,7 +31,11 @@ export interface ThreatType {
 export interface SensorType {
   id: SensorTypeId;
   name: string;
+  /** Short uppercase tag shown on the scope (e.g. "RADAR", "RF-DF"). */
+  code: string;
   icon: string;
+  /** One-line role, e.g. "Detects & tracks most drones". */
+  role: string;
   /** Max effective tracking range in abstract km. */
   range: number;
   /** Tracking quality [0..1] per threat type (0 = cannot track at all). */
@@ -39,7 +45,11 @@ export interface SensorType {
 export interface EffectorType {
   id: EffectorTypeId;
   name: string;
+  /** Short uppercase tag shown on the scope (e.g. "NET", "JAMMER"). */
+  code: string;
   icon: string;
+  /** One-line role, e.g. "Captures drones with a net". */
+  role: string;
   /** Max effective engagement range in abstract km. */
   range: number;
   /** Base single-shot effectiveness [0..1] per threat type when well tracked. */
