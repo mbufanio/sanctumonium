@@ -38,6 +38,22 @@ const MAX_FX = 220;
 const MAX_SPARKS = 160;
 /** How many recent positions a drone's motion trail remembers. */
 const TRAIL_LEN = 7;
+/** Cap on bounty "coin" particles flying to the bank. */
+const MAX_COINS = 70;
+
+/** A bounty coin that zips from a kill up to the FUNDS counter (the bank). */
+interface Coin {
+  x0: number;
+  y0: number;
+  cx: number;
+  cy: number;
+  tx: number;
+  ty: number;
+  age: number;
+  ttl: number;
+  amount: number;
+  popped: boolean;
+}
 
 /** A cheap render-only particle (never touches the sim). */
 interface Spark {
@@ -66,12 +82,14 @@ export class WorldRenderer {
   private rings = new Graphics();
   private coverage = new Graphics();
   private assetGfx = new Graphics();
-  private sweep = new Graphics();
   private ghostGfx = new Graphics();
   private dronesGfx = new Graphics();
   private fxGfx = new Graphics();
   private labelLayer = new Container();
   private labels = new Map<string, Text>();
+  private coinGfx = new Graphics();
+  private coins: Coin[] = [];
+  private fundsEl: HTMLElement | null = null;
   private activeFx: ActiveFx[] = [];
   private sparks: Spark[] = [];
   private trails = new Map<number, Px[]>();
@@ -101,11 +119,13 @@ export class WorldRenderer {
       this.coverage,
       this.ghostGfx,
       this.assetGfx,
-      this.sweep,
       this.dronesGfx,
       this.fxGfx,
       this.labelLayer,
     );
+    // Coins live in SCREEN space (above the world transform) so they can fly
+    // straight to the DOM funds counter at the top of the HUD.
+    this.app.stage.addChild(this.coinGfx);
     // Low-integrity danger vignette — a CSS edge-glow that pulses red as the
     // asset takes damage. Pointer-transparent, behind the overlay UI.
     const danger = document.createElement("div");
@@ -168,39 +188,42 @@ export class WorldRenderer {
     }
   }
 
-  /** Per-frame dynamic draw: rings, sweep, coverage, devices, drones, fx. */
+  /** Per-frame dynamic draw: radar pings, coverage, devices, drones, fx, coins. */
   update(state: GameState): void {
     if (!this.mounted) return;
-    const lvl = state.level;
-    const c = hexToPixel(lvl.asset.pos);
 
-    // Concentric coverage rings + radar sweep.
-    this.rings.clear();
-    for (let ring = 2; ring <= lvl.rings; ring += 2) {
-      this.ellipse(this.rings, c.x, c.y, ring * HEX_SIZE * 1.5, COLORS.coverage, 0.08);
-    }
-    const r = lvl.rings * HEX_SIZE * 1.5;
-    const ang = state.time * 0.7;
-    this.sweep.clear();
-    // A trailing comet of wedges (older = dimmer) plus a bright leading edge —
-    // reads like an actual radar sweep rather than a flat slice.
-    const trail = 6;
-    for (let i = trail; i >= 1; i--) {
-      const a0 = ang - i * 0.12;
-      this.sweep.moveTo(c.x, c.y).arc(c.x, c.y, r, a0, a0 + 0.13).lineTo(c.x, c.y).fill({ color: COLORS.coverage, alpha: 0.012 * (trail - i + 1) });
-    }
-    this.sweep.moveTo(c.x, c.y).arc(c.x, c.y, r, ang, ang + 0.12).lineTo(c.x, c.y).fill({ color: COLORS.coverage, alpha: 0.1 });
-    this.sweep.moveTo(c.x, c.y).lineTo(c.x + Math.cos(ang) * r, c.y + Math.sin(ang) * r).stroke({ color: COLORS.coverage, width: 1.5, alpha: 0.3 });
-    this.sweep.scale.set(1, ISO_SQUASH);
-    this.sweep.position.set(0, c.y * (1 - ISO_SQUASH));
-
+    this.drawRadarPings(state);
     this.drawCoverage(state);
     this.drawAsset(state);
     this.drawGhost();
     this.syncDeviceLabels(state);
     this.drawDrones(state);
     this.drawFx(state);
+    this.drawCoins();
     this.updateDanger(state);
+  }
+
+  /**
+   * Emitting radars announce themselves with sonar-style ping rings that grow
+   * from the device out to its coverage edge (replaces the old central sweep).
+   * Only active emitters (radar / AESA) ping; passive sensors stay quiet.
+   */
+  private drawRadarPings(state: GameState): void {
+    this.rings.clear();
+    const PERIOD = 2.4; // seconds per ping cycle
+    const RINGS = 3;
+    for (const d of state.placed) {
+      if (d.kind !== "sensor") continue;
+      if (d.placeableId !== "radar" && d.placeableId !== "aesa") continue;
+      const s = planeToPixel(d.pos);
+      for (let i = 0; i < RINGS; i++) {
+        const ph = ((state.time / PERIOD) + i / RINGS) % 1;
+        const rr = ph * d.radius;
+        const a = 0.28 * (1 - ph) * (1 - ph); // bright at the emitter, fades outward
+        if (a < 0.01) continue;
+        this.rings.ellipse(s.x, s.y, rr, rr * ISO_SQUASH).stroke({ color: COLORS.coverage, width: 1.3, alpha: a });
+      }
+    }
   }
 
   /** Pulse a red edge-vignette harder as asset integrity falls. */
@@ -355,6 +378,77 @@ export class WorldRenderer {
     if (this.sparks.length > MAX_SPARKS) this.sparks.splice(0, this.sparks.length - MAX_SPARKS);
   }
 
+  // ---- bounty coins (money to the bank) ----------------------------------
+
+  /** Screen-space centre of the FUNDS counter (the bank), with a fallback. */
+  private bankTarget(): Px {
+    if (!this.fundsEl || !this.fundsEl.isConnected) {
+      this.fundsEl = document.querySelector<HTMLElement>(".hud-bar .funds");
+    }
+    if (this.fundsEl) {
+      const r = this.fundsEl.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    return { x: this.app.screen.width * 0.22, y: 28 };
+  }
+
+  /** Launch a little cluster of coins from a kill toward the funds counter. */
+  private spawnCoins(at: Px, bounty: number): void {
+    if (bounty <= 0) return;
+    const x0 = this.world.x + at.x;
+    const y0 = this.world.y + at.y;
+    const t = this.bankTarget();
+    const n = Math.max(1, Math.min(4, 1 + Math.floor(bounty / 8)));
+    const share = bounty / n;
+    for (let i = 0; i < n; i++) {
+      const sx = x0 + (Math.random() - 0.5) * 22;
+      const sy = y0 + (Math.random() - 0.5) * 22;
+      // Arc up and over: a control point lifted above both ends.
+      const cx = (sx + t.x) / 2 + (Math.random() - 0.5) * 140;
+      const cy = Math.min(sy, t.y) - 50 - Math.random() * 70;
+      this.coins.push({ x0: sx, y0: sy, cx, cy, tx: t.x, ty: t.y, age: -i * 0.05, ttl: 0.72 + Math.random() * 0.18, amount: share, popped: false });
+    }
+    if (this.coins.length > MAX_COINS) this.coins.splice(0, this.coins.length - MAX_COINS);
+  }
+
+  private drawCoins(): void {
+    this.coinGfx.clear();
+    if (!this.coins.length) return;
+    const dt = this.app.ticker.deltaMS / 1000;
+    const live: Coin[] = [];
+    for (const c of this.coins) {
+      c.age += dt;
+      if (c.age < 0) { live.push(c); continue; } // staggered launch delay
+      const t = Math.min(1, c.age / c.ttl);
+      if (t >= 1) {
+        if (!c.popped) { c.popped = true; this.bankPop(); }
+        continue;
+      }
+      // Quadratic bezier from kill → control → bank, easing toward the bank.
+      const e = t * t * (3 - 2 * t); // smoothstep
+      const u = 1 - e;
+      const x = u * u * c.x0 + 2 * u * e * c.cx + e * e * c.tx;
+      const y = u * u * c.y0 + 2 * u * e * c.cy + e * e * c.ty;
+      const shrink = 1 - 0.45 * e;
+      // A small gold coin with a brighter rim — reads as money in flight.
+      this.coinGfx.circle(x, y, 5 * shrink).fill({ color: COLORS.brainGold, alpha: 0.95 });
+      this.coinGfx.circle(x, y, 5 * shrink).stroke({ color: 0xfff1c2, width: 1, alpha: 0.9 });
+      this.coinGfx.circle(x - 1.4, y - 1.4, 1.6 * shrink).fill({ color: 0xfff7e0, alpha: 0.9 }); // glint
+      live.push(c);
+    }
+    this.coins = live;
+  }
+
+  /** A quick scale-bounce on the FUNDS counter as money lands. */
+  private bankPop(): void {
+    const el = this.fundsEl;
+    if (!el || !el.isConnected || typeof el.animate !== "function") return;
+    el.animate(
+      [{ transform: "scale(1)" }, { transform: "scale(1.32)", offset: 0.35 }, { transform: "scale(1)" }],
+      { duration: 300, easing: "ease-out" },
+    );
+  }
+
   private drawFx(state: GameState): void {
     // Drain newly-produced fx from the sim into the animated buffer.
     const rt = state.rt;
@@ -366,6 +460,7 @@ export class WorldRenderer {
         if (fx.kind === "kill") {
           const at = planeToPixel(fx.at);
           this.burst(at.x, at.y, COLORS.good, 8, 60);
+          this.spawnCoins(at, fx.bounty);
         } else if (fx.kind === "shot" && fx.hit) {
           const to = planeToPixel(fx.to);
           this.burst(to.x, to.y, fx.effector === "rf-jammer" ? COLORS.brain : COLORS.friendly, 3, 22);
@@ -440,10 +535,6 @@ export class WorldRenderer {
     g.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
     g.closePath().fill({ color: fill, alpha: fillAlpha }).stroke({ color: line, width: 1, alpha: 0.4 });
-  }
-
-  private ellipse(g: Graphics, x: number, y: number, radius: number, color: number, alpha: number): void {
-    g.ellipse(x, y, radius, radius * ISO_SQUASH).stroke({ color, width: 1, alpha });
   }
 
   private triangle(g: Graphics, x: number, y: number, size: number, fill: number, stroke: number): void {

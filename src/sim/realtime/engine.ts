@@ -118,7 +118,7 @@ export function stepWave(
       d.state = "killed";
       rt.killed++;
       kills.push({ typeId: d.typeId, bounty: d.bounty, tracked: d.tracked, pos: d.pos });
-      rt.fx.push({ kind: "kill", at: d.pos });
+      rt.fx.push({ kind: "kill", at: d.pos, bounty: d.bounty });
     }
   };
 

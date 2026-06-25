@@ -507,7 +507,7 @@ body {
 .hud-stat.integrity { flex: 0 0 220px; }
 .hud-k { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.16em; color: var(--text-dim); }
 .hud-v { font-family: var(--mono); font-size: 1.3rem; font-weight: 800; color: var(--text); line-height: 1; }
-.hud-v.funds { color: var(--brain-gold); }
+.hud-v.funds { color: var(--brain-gold); display: inline-block; transform-origin: left center; }
 .integ-bar {
   position: relative;
   height: 18px;

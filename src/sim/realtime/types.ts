@@ -53,7 +53,7 @@ export interface Drone {
 /** Transient visual events produced by a sim step (consumed by the renderer). */
 export type Fx =
   | { kind: "shot"; from: Px; to: Px; effector: string; hit: boolean }
-  | { kind: "kill"; at: Px }
+  | { kind: "kill"; at: Px; bounty: number }
   | { kind: "leak"; at: Px; damage: number }
   // Brain coordination: a sensor handing a track to the effector engaging it.
   | { kind: "handoff"; from: Px; to: Px }
