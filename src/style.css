@@ -718,6 +718,37 @@ body {
 .btn-start:active { transform: translateY(2px); }
 .start-arrow { font-size: 0.85rem; }
 
+/* Act 1 has no economy — hide the FUNDS readout so nothing implies buying. */
+.hud-bar.no-funds .hud-stat:nth-child(2) { display: none; }
+
+/* Scripted Act-1 dock: deploy prompt / locked "grid is set" panel. */
+.build-dock.scripted .build-hint.locked { color: var(--brain-gold); letter-spacing: 0.03em; font-weight: 600; }
+.deploy-panel {
+  pointer-events: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 0.45rem;
+  background: rgba(8, 18, 28, 0.78);
+  border: 1px solid var(--panel-edge);
+  border-radius: 14px;
+  padding: 0.7rem 1.4rem 0.9rem;
+}
+.deploy-head { font-family: var(--mono); font-weight: 800; letter-spacing: 0.12em; font-size: 0.82rem; color: var(--brain); }
+.deploy-head .brain-dot { color: var(--brain-gold); }
+.deploy-sub { font-size: 0.82rem; color: var(--text-dim); max-width: 30rem; text-align: center; }
+.deploy-prog { font-family: var(--mono); font-size: 0.78rem; color: var(--text); letter-spacing: 0.08em; }
+.deploy-count { color: var(--brain-gold); font-weight: 800; }
+.btn-deploy-rest {
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: var(--font); font-weight: 700; font-size: 0.92rem;
+  border: 1px solid var(--brain); border-radius: 10px;
+  padding: 0.5rem 1.3rem; margin-top: 0.2rem;
+  color: var(--brain);
+  background: rgba(79, 195, 247, 0.08);
+  transition: opacity 0.12s ease, transform 0.08s ease;
+}
+.btn-deploy-rest:not(:disabled):active { transform: scale(0.97); }
+.btn-deploy-rest.poor { opacity: 0.4; cursor: default; }
+
 /* final score on the summary screen */
 .final-score { margin: 1rem auto 1.4rem; }
 .fs-k { font-family: var(--mono); letter-spacing: 0.2em; font-size: 0.74rem; color: var(--text-dim); }

@@ -24,13 +24,15 @@ export interface Composition {
   mods?: SpawnMods;
 }
 
-/** Build a normal wave: spread spawns over time and around all 360°. */
-export function makeWave(index: number, comps: Composition[], stipend: number, label?: string): WaveDef {
+/** Build a normal wave: spread spawns over time and around all 360°.
+ *  `dense` forces the tight rush gap without needing a swarm size-mod — used by
+ *  the scripted Act-1 waves, which must saturate the fixed grid to bleed it. */
+export function makeWave(index: number, comps: Composition[], stipend: number, label?: string, dense = false): WaveDef {
   const spawns: SpawnEntry[] = [];
   let n = 0;
   const total = comps.reduce((a, c) => a + c.count, 0);
   // Swarms spawn faster (tighter gap) so they read as a rush, not a trickle.
-  const swarmy = comps.some((c) => (c.mods?.size ?? 1) < 0.8);
+  const swarmy = dense || comps.some((c) => (c.mods?.size ?? 1) < 0.8);
   const gap = swarmy ? 0.35 : 0.8;
   for (const c of comps) {
     for (let i = 0; i < c.count; i++) {

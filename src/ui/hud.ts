@@ -13,6 +13,16 @@ import { placeablesForTier, placeableById, nextUpgrade, type Placeable } from ".
 import type { Recommendation } from "../sim/realtime/adaptive.ts";
 import type { GameState } from "../sim/state.ts";
 
+export interface ScriptedDockOpts {
+  kind: "deploy" | "locked";
+  deployReady?: boolean;
+  placed?: number;
+  total?: number;
+  startLabel: string;
+  onDeployRest?(): void;
+  onStart(): void;
+}
+
 export interface HudCallbacks {
   onSelectPlaceable(id: string): void;
   onStartWave(): void;
@@ -74,6 +84,9 @@ export class Hud {
     this.ensureBar();
     const arcade = state.act === "arcade";
     this.bar?.classList.toggle("arcade", arcade);
+    // Act 1 has no economy — the laydown is fixed. Hide FUNDS so the screen
+    // never implies the player is buying their way through. It returns in arcade.
+    this.bar?.classList.toggle("no-funds", !arcade);
     const entry = state.scheduleIndex;
     this.refs.stage.textContent = state.phase === "wave" && state.activeWave ? state.activeWave.label : `Step ${entry + 1}`;
     this.refs.funds.textContent = `$${Math.floor(state.currency)}`;
@@ -181,6 +194,47 @@ export class Hud {
   hideBuild(): void {
     this.dock?.remove();
     this.dock = null;
+  }
+
+  /**
+   * Scripted Act-1 dock. The pre-arcade act has NO economy and a FIXED laydown,
+   * so the between-waves dock isn't a shop — it's either a guided deploy prompt
+   * ("tap the lit hex / deploy the rest") or a locked "the grid is set, brace"
+   * panel with only the start button. This keeps Act 1 honest: same gear the
+   * whole way, the only variable is the brain.
+   */
+  showScriptedDock(_state: GameState, opts: ScriptedDockOpts): void {
+    this.ensureBar();
+    this.dock?.remove();
+    const dock = el("div", "build-dock scripted");
+
+    if (opts.kind === "deploy") {
+      const placed = opts.placed ?? 0;
+      const total = opts.total ?? placed;
+      const panel = el("div", "deploy-panel");
+      panel.innerHTML = `
+        <div class="deploy-head"><span class="brain-dot">◈</span> STAND UP THE GRID</div>
+        <div class="deploy-sub">Tap the lit hex to place each device — this is your fixed laydown.</div>
+        <div class="deploy-prog"><span class="deploy-count">${placed}</span> / ${total} deployed</div>
+      `;
+      const rest = el("button", "btn-deploy-rest" + (opts.deployReady ? "" : " poor")) as HTMLButtonElement;
+      rest.disabled = !opts.deployReady;
+      rest.innerHTML = `<span>Deploy the rest ▸</span>`;
+      rest.onclick = () => opts.onDeployRest?.();
+      panel.append(rest);
+      dock.append(panel);
+    } else {
+      const hint = el("div", "build-hint locked");
+      hint.textContent = "◈ Grid is set — same gear, every wave. The brain does the rest.";
+      dock.append(hint);
+      const start = el("button", "btn-start") as HTMLButtonElement;
+      start.innerHTML = `<span>${opts.startLabel}</span><span class="start-arrow">▶</span>`;
+      start.onclick = () => opts.onStart();
+      dock.append(start);
+    }
+
+    this.root.append(dock);
+    this.dock = dock;
   }
 
   private recCard(rec: Recommendation, state: GameState): HTMLElement {

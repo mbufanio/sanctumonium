@@ -12,7 +12,7 @@
 import { Application } from "pixi.js";
 import { Rng, timeSeed } from "./sim/rng.ts";
 import { ringDistance, hexKey, hexRing, type Hex } from "./sim/hex.ts";
-import { LEVEL_1, LEVELS, type LevelDef } from "./sim/level.ts";
+import { LEVEL_1, LEVELS, act1Laydown, type LaydownItem, type LevelDef } from "./sim/level.ts";
 import { buildTerrain, isBlockedForBuild, type TerrainMap } from "./sim/terrain.ts";
 import {
   createInitialState,
@@ -48,9 +48,21 @@ export class Game {
   private leaderboard: LeaderboardUI;
   /** Scripted Act-1 operator lines fire once per run (guard against replays). */
   private said = new Set<string>();
-  /** Guided first-placement (ACT1 §4 Beat 2): one-tap coaching, first build only. */
-  private guideActive = false;
-  private guideDone = false;
+  /** Scripted Act-1 fixed-laydown deploy (guide a few, then deploy the rest). */
+  private deployQueue: LaydownItem[] = [];
+  private deployGuided = 0;
+  private act1Deployed = false;
+  private static readonly DEPLOY_GUIDED = 3;
+  /** Asset repair rate (integrity/sec) once coordination is online — the brain
+   *  frees the site to recover. Off pre-coordination, so HP genuinely sinks. */
+  private static readonly COORD_REGEN = 1.8;
+  /** Act-1 is a scripted demo that must always reach the sales pitch — the asset
+   *  can be battered to this floor but never destroyed before the act break. The
+   *  arcade act has NO floor (there, overwhelm is the whole point). */
+  private static readonly ACT1_FLOOR = 12;
+  /** Seed funds granted when the arcade act opens (economy returns here). */
+  private static readonly ARCADE_PREP_BUDGET = 450;
+  private static readonly ACT1_LOW_LINE = "act1-low";
   private rng: Rng;
   private accumulator = 0;
   private currentBossIndex: 1 | 2 | null = null;
@@ -151,8 +163,9 @@ export class Game {
     const res = stepWave(s.rt, s.placed, s.activeWave, dt, this.rng, { spawnRadius: this.world.spawnRadius(s), coordinated, terrain: this.terrain });
 
     for (const k of res.kills) {
-      s.currency += k.bounty;
-      // Scoring rewards coordination: a tracked kill is worth more (spec §8).
+      // Act 1 is a scripted demo (no economy) — kills earn money only in the
+      // arcade act. Score still climbs, and tracked kills score double.
+      if (s.act === "arcade") s.currency += k.bounty;
       s.score += k.bounty * (k.tracked ? TRACKED_KILL_BONUS : 1.0);
       s.kills++;
     }
@@ -161,6 +174,17 @@ export class Game {
       s.leaked++;
       // Airport wrinkle (spec §9): a leak also disrupts operations → score hit.
       s.score = Math.max(0, s.score - s.level.leakScorePenalty);
+    }
+    // Honest integrity arc (ACT1): pre-coordination the asset genuinely bleeds;
+    // once the brain is online and leaks dry up, repair crews bring it back.
+    if (s.act === "ops" && s.brainUnlocked && s.integrity < s.maxIntegrity) {
+      s.integrity = Math.min(s.maxIntegrity, s.integrity + Game.COORD_REGEN * dt);
+    }
+    // Scripted-demo floor: Act 1 never loses the asset before the act break.
+    if (s.act === "ops") s.integrity = Math.max(Game.ACT1_FLOOR, s.integrity);
+    // VEGA flags the bleed when it gets scary (pre-coordination only).
+    if (s.act === "ops" && !s.brainUnlocked && s.integrity <= s.maxIntegrity * 0.4) {
+      this.sayOnce(Game.ACT1_LOW_LINE, "We're bleeding — they're getting through faster than we can stop them.");
     }
     // Bucket the kill-chain tallies by coordination state (ACT1 spec §3) — only
     // through Act 1 (the arcade is out of scope for the before/after proof).
@@ -218,9 +242,20 @@ export class Game {
     this.terrain = buildTerrain(level.terrain);
     this.currentBossIndex = null;
     this.said.clear();
-    this.guideDone = false;
-    this.guideActive = false;
     this.world.setGuide(null);
+    // Scripted Act 1: the laydown is FIXED (proves the brain, not the budget).
+    // Start with an empty field, no money, and queue the deploy (terrain-safe).
+    this.state.placed = [];
+    this.state.currency = 0;
+    this.deployGuided = 0;
+    this.act1Deployed = false;
+    const occupied = new Set<string>();
+    this.deployQueue = act1Laydown(level).filter((it) => {
+      const k = hexKey(it.hex);
+      if (occupied.has(k) || isBlockedForBuild(this.terrain, it.hex)) return false;
+      occupied.add(k);
+      return true;
+    });
     this.world.drawStatic(this.state);
     this.screens.clear();
     // VEGA comes on station: site + stakes (ACT1 spec §2).
@@ -259,31 +294,80 @@ export class Game {
       this.endRun(true);
       return;
     }
-    this.recDismissed = false;
-    this.operator.setSitrep(s.level.name, s.brainUnlocked ? "coordination active · build" : "grid hot · build");
-    this.refreshBuildDock();
-    // First build of the run: coach a single placement so a cold visitor isn't
-    // dropped in (ACT1 §4, Beat 2). Skippable/non-blocking — placing anywhere,
-    // or starting the wave, ends it.
-    if (!this.guideDone && s.scheduleIndex === 0 && !this.attract) this.startGuided();
+    this.operator.setSitrep(s.level.name, s.brainUnlocked ? "coordination active" : "grid hot");
+    // Scripted Act 1: first build deploys the FIXED laydown; later builds just
+    // gate the next wave (the laydown is locked — no buying, no income).
+    if (!this.act1Deployed) {
+      this.startDeploy();
+      return;
+    }
+    this.hud.showScriptedDock(s, { kind: "locked", startLabel: this.nextEntryLabel(), onStart: () => this.startScheduleEntry() });
+    if (s.brainUnlocked) {
+      this.sayOnce("recovering", "Holding. Repair crews are catching up — integrity's climbing back.");
+    }
   }
 
-  private startGuided(): void {
-    this.guideDone = true;
-    this.guideActive = true;
-    const s = this.state;
-    const target: Hex = { q: 0, r: -3 }; // north approach, ring 3, free
-    s.selectedPlaceable = "radar";
-    this.world.setGuide(target);
-    this.refreshBuildDock();
-    this.operator.say("Drop a radar on the north approach. That's where they'll come.");
+  // ---- scripted Act-1 fixed-laydown deploy (guide a few, then deploy) -----
+
+  private startDeploy(): void {
+    if (this.attract) {
+      // The bot just drops the whole grid and goes.
+      this.deployRest();
+      this.hud.showScriptedDock(this.state, { kind: "locked", startLabel: this.nextEntryLabel(), onStart: () => this.startScheduleEntry() });
+      return;
+    }
+    this.deployGuided = 0;
+    this.world.setGuide(this.deployQueue[0]?.hex ?? null);
+    this.sayOnce("deploy", "Stand up the grid. Drop a radar on the north approach — tap where it's lit.");
+    this.refreshDeployDock();
   }
 
-  private endGuided(): void {
-    if (!this.guideActive) return;
-    this.guideActive = false;
+  private refreshDeployDock(): void {
+    const ready = this.deployGuided >= Game.DEPLOY_GUIDED || this.deployQueue.length === 0;
+    this.hud.showScriptedDock(this.state, {
+      kind: this.deployQueue.length === 0 ? "locked" : "deploy",
+      deployReady: ready,
+      placed: this.state.placed.length,
+      total: this.state.placed.length + this.deployQueue.length,
+      startLabel: this.nextEntryLabel(),
+      onDeployRest: () => this.deployRest(),
+      onStart: () => this.startScheduleEntry(),
+    });
+  }
+
+  /** Place the next queued device at its SCRIPTED hex (a guided tap). */
+  private deployNext(): void {
+    const item = this.deployQueue.shift();
+    if (!item) return;
+    this.state.placed.push(makePlaced(item.placeableId, item.hex));
+    this.deployGuided++;
+    if (this.deployQueue.length === 0) {
+      this.finishDeploy();
+      return;
+    }
+    if (this.deployGuided < Game.DEPLOY_GUIDED) {
+      this.world.setGuide(this.deployQueue[0].hex);
+      if (this.deployGuided === 1) this.operator.say("Good. Now a sensor and an effector — keep going.");
+    } else {
+      this.world.setGuide(null);
+      this.operator.say("You've got the idea. I'll drop the rest of the grid.");
+    }
+    this.refreshDeployDock();
+  }
+
+  /** Auto-place every remaining scripted device at once ("Deploy the rest"). */
+  private deployRest(): void {
+    for (const item of this.deployQueue) this.state.placed.push(makePlaced(item.placeableId, item.hex));
+    this.deployQueue = [];
+    this.finishDeploy();
+  }
+
+  private finishDeploy(): void {
+    this.deployQueue = [];
+    this.act1Deployed = true;
     this.world.setGuide(null);
-    this.operator.say("Good. Rest of the grid is yours.");
+    this.sayOnce("gridup", "Grid's up. This is everything you've got — same gear the whole way. Brace.");
+    this.hud.showScriptedDock(this.state, { kind: "locked", startLabel: this.nextEntryLabel(), onStart: () => this.startScheduleEntry() });
   }
 
   /** Recompute the brain recommendation (after unlock) and (re)render the dock. */
@@ -328,7 +412,6 @@ export class Game {
       s.selectedDeviceId = null;
       s.selectedPlaceable = null;
       this.world.setGhost(null);
-      this.guideActive = false;
       this.world.setGuide(null);
       // Ops act builds between waves only — the dock closes for the fight.
       this.hud.hideBuild();
@@ -349,7 +432,8 @@ export class Game {
   private completeWave(): void {
     const s = this.state;
     if (s.activeWave) {
-      s.currency += s.activeWave.stipend;
+      // Act 1 has no economy — only the arcade pays a between-wave stipend.
+      if (s.act === "arcade") s.currency += s.activeWave.stipend;
       s.score += s.activeWave.stipend * 0.4;
       s.wavesSurvived++;
     }
@@ -481,6 +565,9 @@ export class Game {
   /** Continue out of the "Future Systems Online" act break into the arcade act. */
   private afterActBreak(): void {
     this.screens.clear();
+    // Arcade turns the economy back ON. Seed a prep budget so the player can
+    // stand up tier-3 gear before the onslaught (and earn more from kills).
+    this.state.currency = Game.ARCADE_PREP_BUDGET;
     this.state.scheduleIndex++;
     this.enterBuild();
   }
@@ -621,9 +708,16 @@ export class Game {
     });
   }
 
-  private handleFieldTap(hex: Hex): void {
+  private handleFieldTap(_hex: Hex): void {
     if (this.attract) return; // attract taps exit the demo, never place
     const s = this.state;
+    // Scripted Act 1: a tap deploys the next guided device at its FIXED hex
+    // (location is pre-scripted — the laydown can't change). Otherwise locked.
+    if (s.act === "ops") {
+      if (!this.act1Deployed && this.deployGuided < Game.DEPLOY_GUIDED) this.deployNext();
+      return;
+    }
+    const hex = _hex;
     const occupant = s.placed.find((d) => hexKey(d.hex) === hexKey(hex));
     if (occupant) {
       // Tap a placed device → open its upgrade/sell panel (toggle).
@@ -647,7 +741,6 @@ export class Game {
     s.placed.push(makePlaced(p.id, hex));
     // Deselect if the next one is no longer affordable, else keep placing.
     if (s.currency < p.cost) s.selectedPlaceable = null;
-    this.endGuided(); // the first placement hands control back
     this.refreshBuildDock();
     this.updateGhost();
   }

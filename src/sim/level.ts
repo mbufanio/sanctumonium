@@ -8,7 +8,7 @@
  * (a swarm is fast/cheap/small RF quads; jammer-immune pressure is autonomy-
  * heavy) plus a couple of level flags — no new threat types required.
  */
-import type { Hex } from "./hex.ts";
+import { hexRing, type Hex } from "./hex.ts";
 import { makeWave, type ScheduleEntry } from "./realtime/schedule.ts";
 import { cells, hexCluster, hexLine, type TerrainCell } from "./terrain.ts";
 
@@ -70,18 +70,22 @@ const MILITARY: LevelDef = {
     ...cells(hexLine({ q: -5, r: -1 }, { q: -2, r: -3 }), "nofire"),
   ],
   restrictedPlaceables: [],
+  // Scripted Act-1 arc (the value-prop demo). The FIXED laydown (act1Laydown)
+  // fights all five waves with no economy. Waves 1-2 are UNCOORDINATED and
+  // dense enough to saturate the grid — the asset bleeds to ~25% by Boss #1.
+  // After Boss #1 the brain comes online; waves 3-5 are comparably sized but
+  // coordination + repair recovers the asset to ~80% by Boss #2. Same gear the
+  // whole way — the brain is the only thing that changed. (Tuned headlessly;
+  // the controller floors ops integrity so the demo always reaches the pitch.)
+  // After Boss #2 the run crosses into the endless arcade act (no fixed waves).
   schedule: [
-    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 4 }], 60) },
-    { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 6 }], 75) },
+    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 24 }, { typeId: "autonomy", count: 7 }], 0, undefined, true) },
+    { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 31 }, { typeId: "autonomy", count: 10 }, { typeId: "low-observable", count: 7 }], 0, "WAVE 2 — RUSH", true) },
     BOSS_1,
-    { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 5 }, { typeId: "low-observable", count: 2 }], 90) },
-    { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 2 }], 105) },
-    { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 2 }], 120) },
+    { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 24 }, { typeId: "autonomy", count: 7 }, { typeId: "low-observable", count: 6 }], 0, undefined, true) },
+    { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 29 }, { typeId: "autonomy", count: 8 }, { typeId: "low-observable", count: 7 }], 0, undefined, true) },
+    { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 34 }, { typeId: "autonomy", count: 10 }, { typeId: "low-observable", count: 8 }], 0, undefined, true) },
     BOSS_2,
-    { type: "wave", wave: makeWave(6, [{ typeId: "rf-quad", count: 8 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 3 }], 140) },
-    { type: "wave", wave: makeWave(7, [{ typeId: "rf-quad", count: 9 }, { typeId: "autonomy", count: 4 }, { typeId: "low-observable", count: 4 }], 160) },
-    { type: "wave", wave: makeWave(8, [{ typeId: "rf-quad", count: 13 }, { typeId: "autonomy", count: 6 }, { typeId: "low-observable", count: 6 }], 220) },
-    { type: "wave", wave: makeWave(9, [{ typeId: "rf-quad", count: 22 }, { typeId: "autonomy", count: 12 }, { typeId: "low-observable", count: 10 }], 320, "FINAL WAVE") },
   ],
 };
 
@@ -194,3 +198,36 @@ export function getLevel(id: string): LevelDef {
 
 /** The default / starter level (flat, clean — the booth's opener). */
 export const LEVEL_1 = ENERGY;
+
+/** One placement in the fixed Act-1 laydown. */
+export interface LaydownItem {
+  placeableId: string;
+  hex: Hex;
+}
+
+/**
+ * The FIXED Act-1 laydown (the scripted-demo redesign). Act 1 proves the brain,
+ * not the budget, so the gear is the SAME from wave 1 through Boss #2 — only
+ * coordination changes. A deliberately rich grid: several radars (for track
+ * FUSION and hand-off between them), an RF-DF (the only thing that classifies a
+ * non-emitting drone), and a ring of net-drones + jammers (whose magazines and
+ * reloads coordination staggers). Spread 360° on overlapping rings. The
+ * controller filters any hex blocked by a site's terrain.
+ */
+export function act1Laydown(level: LevelDef): LaydownItem[] {
+  const sensorRing = hexRing(3); // 18 cells
+  const effRing = hexRing(2); // 12 cells
+  const out: LaydownItem[] = [];
+  const sensors: Array<[number, string]> = [
+    [0, "radar"], [5, "rf-df"], [9, "radar"], [13, "radar"],
+  ];
+  for (const [idx, id] of sensors) out.push({ placeableId: id, hex: sensorRing[idx % sensorRing.length] });
+  const effectors: Array<[number, string]> = [
+    [0, "net-drone"], [2, "rf-jammer"], [4, "net-drone"], [6, "net-drone"], [8, "rf-jammer"], [10, "net-drone"],
+  ];
+  for (const [idx, id] of effectors) {
+    if (level.restrictedPlaceables.includes(id)) continue;
+    out.push({ placeableId: id, hex: effRing[idx % effRing.length] });
+  }
+  return out;
+}
