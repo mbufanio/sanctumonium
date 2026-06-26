@@ -9,6 +9,7 @@ export interface ScreenCallbacks {
   onStart(): void;
   onUnlockContinue(): void;
   onActBreakContinue(): void;
+  onArcadeOverContinue(): void;
   onRestart(): void;
 }
 
@@ -110,6 +111,25 @@ export class Screens {
     `;
     const btn = button("Go loud", "screen-cta accent-cta");
     btn.onclick = () => this.cb.onActBreakContinue();
+    s.append(btn);
+    this.root.append(s);
+  }
+
+  /** Arcade overwhelm beat — the run only ever ends here (survived to Wave N). */
+  arcadeOver(wave: number, score: number): void {
+    this.clear();
+    const s = screen("arcadeover-screen");
+    s.innerHTML = `
+      <div class="screen-kicker" style="color:var(--bad)">SYSTEM OVERWHELMED</div>
+      <h1 class="screen-h1">The swarm broke through.</h1>
+      <div class="arcade-stat">
+        <div class="as-block"><div class="as-k">SURVIVED TO</div><div class="as-v">WAVE ${wave}</div></div>
+        <div class="as-block"><div class="as-k">SCORE</div><div class="as-v">${score.toLocaleString()}</div></div>
+      </div>
+      <p class="screen-body">No grid holds forever — but a coordinated one holds longest.</p>
+    `;
+    const btn = button("Log the run", "screen-cta");
+    btn.onclick = () => this.cb.onArcadeOverContinue();
     s.append(btn);
     this.root.append(s);
   }

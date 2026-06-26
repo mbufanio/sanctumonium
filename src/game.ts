@@ -24,7 +24,7 @@ import {
 import { placeableById, nextUpgrade, TRACKED_KILL_BONUS } from "./sim/realtime/catalog.ts";
 import { createRealtimeState } from "./sim/realtime/types.ts";
 import { stepWave } from "./sim/realtime/engine.ts";
-import { bossConfigFromLayout, tierForBosses } from "./sim/realtime/schedule.ts";
+import { bossConfigFromLayout, makeArcadeWave, offsetWave, tierForBosses } from "./sim/realtime/schedule.ts";
 import { adaptWave, recommendPlacement, type Recommendation } from "./sim/realtime/adaptive.ts";
 import { computeOptimal, emptyAssignment, resolveEncounter } from "./sim/boss/engine.ts";
 import { WorldRenderer } from "./render/world.ts";
@@ -80,6 +80,7 @@ export class Game {
       onStart: () => this.startRun(),
       onUnlockContinue: () => this.afterUnlock(),
       onActBreakContinue: () => this.afterActBreak(),
+      onArcadeOverContinue: () => this.proceedToSubmit(),
       onRestart: () => this.restart(),
     });
     this.hud = new Hud(overlay, {
@@ -159,7 +160,14 @@ export class Game {
       this.endRun(false);
       return;
     }
-    if (res.waveComplete) this.completeWave();
+    if (s.act === "arcade") {
+      // Endless rolling escalation: the instant the current batch has finished
+      // SPAWNING, the next (harder) batch is queued — so pressure never lets up
+      // and the only way out is to be overwhelmed.
+      if (s.rt.spawnCursor >= s.activeWave.spawns.length) this.rollArcadeWave();
+    } else if (res.waveComplete) {
+      this.completeWave();
+    }
   }
 
   // ---- phase transitions -------------------------------------------------
@@ -204,13 +212,21 @@ export class Game {
     s.rt = null;
     s.activeWave = null;
     this.console.clear();
+    s.maxTier = tierForBosses(s.bossesBeaten);
+    s.selectedDeviceId = null;
+    // Arcade act: there is no fixed schedule left — this is the single PREP
+    // window before the endless onslaught begins. (No recommendation card; the
+    // arcade is reflex, not planning.)
+    if (s.act === "arcade") {
+      this.recDismissed = true;
+      this.refreshBuildDock();
+      return;
+    }
     if (s.scheduleIndex >= s.level.schedule.length) {
       this.endRun(true);
       return;
     }
     this.recDismissed = false;
-    s.selectedDeviceId = null;
-    s.maxTier = tierForBosses(s.bossesBeaten);
     this.refreshBuildDock();
   }
 
@@ -228,6 +244,7 @@ export class Game {
   }
 
   private nextEntryLabel(): string {
+    if (this.state.act === "arcade") return "◆ BEGIN THE ONSLAUGHT";
     const entry = this.state.level.schedule[this.state.scheduleIndex];
     if (!entry) return "Finish";
     if (entry.type === "boss") return `⚠ Boss attack — Step ${this.state.scheduleIndex + 1}`;
@@ -237,6 +254,10 @@ export class Game {
   /** Player pressed "start" in the build dock → run the next schedule entry. */
   private startScheduleEntry(): void {
     const s = this.state;
+    if (s.act === "arcade") {
+      this.startArcade();
+      return;
+    }
     const entry = s.level.schedule[s.scheduleIndex];
     if (!entry) {
       this.endRun(true);
@@ -249,13 +270,10 @@ export class Game {
       s.activeWave = adaptWave(entry.wave, s.placed, this.world.spawnRadius(s), this.rng, this.terrain);
       for (const d of s.placed) d.cooldown = 0;
       s.selectedDeviceId = null;
+      s.selectedPlaceable = null;
       this.world.setGhost(null);
-      // Arcade act: keep the build dock up so the player can reinforce live.
-      if (s.act === "arcade") this.refreshBuildDock();
-      else {
-        s.selectedPlaceable = null;
-        this.hud.hideBuild();
-      }
+      // Ops act builds between waves only — the dock closes for the fight.
+      this.hud.hideBuild();
     } else {
       this.startBoss(entry.bossIndex);
     }
@@ -270,6 +288,54 @@ export class Game {
     }
     s.scheduleIndex++;
     this.enterBuild();
+  }
+
+  // ---- arcade survival (post-Boss-#2 endless mode) -----------------------
+
+  /** Kick off the endless arcade: the first wave, then it rolls forever. */
+  private startArcade(): void {
+    const s = this.state;
+    s.phase = "wave";
+    s.arcadeWave = 1;
+    s.rt = createRealtimeState();
+    s.activeWave = adaptWave(makeArcadeWave(1), s.placed, this.world.spawnRadius(s), this.rng, this.terrain);
+    for (const d of s.placed) d.cooldown = 0;
+    s.selectedDeviceId = null;
+    this.world.setGhost(null);
+    this.refreshBuildDock(); // mid-wave reinforce dock
+    this.flashThreatLevel(1);
+  }
+
+  /** Queue the next, harder arcade batch (offset so it spawns from "now"). */
+  private rollArcadeWave(): void {
+    const s = this.state;
+    if (!s.rt) return;
+    s.arcadeWave++;
+    s.wavesSurvived++;
+    // Survival payout so the player can keep buying tier-3 mid-fight (income
+    // deliberately can't outrun the escalation forever).
+    const reward = 30 + s.arcadeWave * 10;
+    s.currency += reward;
+    s.score += reward * 0.5;
+    const next = adaptWave(makeArcadeWave(s.arcadeWave), s.placed, this.world.spawnRadius(s), this.rng, this.terrain);
+    s.activeWave = offsetWave(next, s.rt.time + 0.3);
+    s.rt.spawnCursor = 0;
+    this.flashThreatLevel(s.arcadeWave);
+    this.refreshBuildDock();
+  }
+
+  /** A brief centre-screen "THREAT LEVEL N" pulse as each arcade wave rolls in. */
+  private flashThreatLevel(n: number): void {
+    let el = document.getElementById("threat-flash");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "threat-flash";
+      document.body.append(el);
+    }
+    el.innerHTML = `<div class="tf-k">THREAT LEVEL</div><div class="tf-n">${n}</div>`;
+    el.classList.remove("show");
+    void el.offsetWidth; // restart the animation
+    el.classList.add("show");
   }
 
   // ---- boss flow (Phase 1 console, on the built layout) ------------------
@@ -337,6 +403,7 @@ export class Game {
   private endRun(victory: boolean): void {
     const s = this.state;
     s.victory = victory;
+    const arcade = s.act === "arcade";
     s.phase = "summary";
     s.rt = null;
     // In the attract demo, don't prompt for a score — just loop to the next run.
@@ -347,6 +414,19 @@ export class Game {
     this.console.clear();
     this.hud.clear();
     this.world.setGhost(null);
+    // Arcade ends only by being overwhelmed — show the "you survived to Wave N"
+    // beat first, then the score submission.
+    if (arcade) {
+      this.screens.arcadeOver(s.arcadeWave, Math.floor(s.score));
+      return;
+    }
+    this.proceedToSubmit();
+  }
+
+  /** Build the run stats and open the score-submission flow. */
+  private proceedToSubmit(): void {
+    const s = this.state;
+    this.screens.clear();
     const stats: RunStats = {
       levelId: s.level.id,
       score: s.score,
@@ -355,7 +435,7 @@ export class Game {
       leaked: s.leaked,
       spent: s.spent,
       integrity: Math.max(0, Math.round(s.integrity)),
-      victory,
+      victory: s.victory,
       boss1Stopped: s.log.boss1?.stopped ?? 0,
       boss2Stopped: s.log.boss2?.stopped ?? 0,
     };

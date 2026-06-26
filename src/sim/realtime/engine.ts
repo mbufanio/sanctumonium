@@ -268,7 +268,7 @@ function spawnDrone(rt: RealtimeState, s: SpawnEntry, spawnRadius: number): Dron
     typeId: s.typeId,
     pos: { x: Math.cos(rad) * spawnRadius, y: Math.sin(rad) * spawnRadius },
     speed: spec.speed * (m.speedMul ?? 1),
-    hp: spec.hp,
+    hp: Math.max(1, Math.round(spec.hp * (m.hpMul ?? 1))),
     bounty: Math.round(spec.bounty * (m.bountyMul ?? 1)),
     leakDamage: spec.leakDamage * (m.leakMul ?? 1),
     state: "alive",

@@ -76,6 +76,9 @@ export interface SpawnMods {
   speedMul?: number;
   bountyMul?: number;
   leakMul?: number;
+  /** Hit points multiplier (>1 = hardened drones that survive a single hit —
+   *  the late-arcade escalation that defeats one-shot area weapons). */
+  hpMul?: number;
   /** Visual scale (1 = normal; <1 for swarm micro-drones). */
   size?: number;
 }

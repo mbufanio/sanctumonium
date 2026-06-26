@@ -208,6 +208,36 @@ body {
 .fc-b { font-size: 0.92rem; color: var(--text); line-height: 1.4; }
 @media (max-width: 760px) { .future-grid { grid-template-columns: 1fr; } }
 
+/* ---- arcade survival --------------------------------------------------- */
+
+/* The HUD shifts to a hot ARCADE treatment once the act break is crossed. */
+.hud-bar.arcade { background: linear-gradient(180deg, rgba(40, 8, 18, 0.92), rgba(6, 13, 21, 0)); }
+.hud-coord.arcade.on, .hud-coord.arcade {
+  color: #ff8a4a; border-color: #ff8a4a; background: rgba(255, 138, 74, 0.12);
+  text-shadow: 0 0 14px rgba(255, 138, 74, 0.5);
+}
+
+/* "THREAT LEVEL N" pulse as each rolling wave arrives. */
+#threat-flash {
+  position: fixed; left: 50%; top: 24%; transform: translate(-50%, -50%);
+  z-index: 30; pointer-events: none; text-align: center; opacity: 0;
+}
+#threat-flash.show { animation: threatpulse 1.5s ease forwards; }
+#threat-flash .tf-k { font-family: var(--mono); letter-spacing: 0.3em; font-size: 0.9rem; color: #ff8a4a; }
+#threat-flash .tf-n { font-family: var(--mono); font-weight: 800; font-size: 3.4rem; color: #ff8a4a; text-shadow: 0 0 24px rgba(255, 100, 60, 0.7); line-height: 1; }
+@keyframes threatpulse {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  18% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  70% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Arcade overwhelm summary. */
+.arcade-stat { display: flex; gap: 2.4rem; justify-content: center; margin: 1.6rem auto; }
+.as-k { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.16em; color: var(--text-dim); }
+.as-v { font-family: var(--mono); font-weight: 800; font-size: 2.6rem; color: var(--text); line-height: 1.1; }
+.arcadeover-screen .as-block:first-child .as-v { color: #ff8a4a; }
+
 .brain-boot {
   margin: 2.4rem auto 1.6rem;
   opacity: 0;

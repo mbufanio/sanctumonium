@@ -67,6 +67,8 @@ export interface GameState {
   maxTier: Tier;
   /** Bosses beaten this run (drives the tech-tier unlocks). */
   bossesBeaten: number;
+  /** Arcade survival wave number (0 in the ops act; climbs endlessly in arcade). */
+  arcadeWave: number;
 
   // Schedule / waves.
   scheduleIndex: number;
@@ -144,6 +146,7 @@ export function createInitialState(level: LevelDef): GameState {
     spent: 0,
     maxTier: 1,
     bossesBeaten: 0,
+    arcadeWave: 0,
     scheduleIndex: 0,
     rt: null,
     activeWave: null,

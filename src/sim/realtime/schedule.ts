@@ -43,6 +43,42 @@ export function makeWave(index: number, comps: Composition[], stipend: number, l
   return { index, kind: "normal", label: label ?? `Wave ${index}`, spawns, stipend };
 }
 
+/** Shift every spawn time by `delta` (so a fresh batch fires after `now`). */
+export function offsetWave(wave: WaveDef, delta: number): WaveDef {
+  return { ...wave, spawns: wave.spawns.map((s) => ({ ...s, at: s.at + delta })) };
+}
+
+/**
+ * Arcade survival wave `n` (spec: post-Boss-#2 endless mode). Difficulty climbs
+ * without bound on THREE axes at once — more drones, spawned DENSER (the gap
+ * between them shrinks), and faster — so the spawn rate eventually outruns any
+ * grid's kill rate and the run always ends by being OVERWHELMED, never by
+ * "winning". The mix tilts to harder types over time; bounties shrink so income
+ * can't keep pace. Bearings fan around the full 360° (the adaptive layer then
+ * biases them toward the player's seams).
+ */
+export function makeArcadeWave(n: number): WaveDef {
+  const total = 6 + Math.round(n * 2.4) + Math.round(Math.max(0, n - 18) * 2.5); // accelerates late
+  const speed = 1 + n * 0.07; // everything gets faster
+  const gap = Math.max(0.05, 0.45 - n * 0.02); // and arrives DENSER each wave
+  // Hardened bodies ramp in from ~wave 10 — late drones survive a single hit,
+  // so even one-shot area weapons can't clear the swarm forever.
+  const hpMul = 1 + Math.floor(Math.max(0, n - 9) / 7);
+  const swarmy = n >= 3;
+  const spawns: SpawnEntry[] = [];
+  for (let i = 0; i < total; i++) {
+    const r = (i * 0.61803) % 1; // even-ish type spread
+    const typeId: ThreatTypeId = r > 0.7 ? "low-observable" : r > 0.4 ? "autonomy" : "rf-quad";
+    spawns.push({
+      at: 0.4 + i * gap,
+      typeId,
+      bearing: ((i * 360) / total + n * 37) % 360,
+      mods: { speedMul: speed, size: swarmy ? 0.7 : 1, bountyMul: 0.55, hpMul },
+    });
+  }
+  return { index: 1000 + n, kind: "normal", label: `WAVE ${n}`, spawns, stipend: 0 };
+}
+
 /** One schedule entry: a real-time wave or a boss fight on the built layout. */
 export type ScheduleEntry =
   | { type: "wave"; wave: WaveDef }

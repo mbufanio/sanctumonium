@@ -72,18 +72,26 @@ export class Hud {
   /** Update the live values in the status bar (call every frame). */
   update(state: GameState): void {
     this.ensureBar();
+    const arcade = state.act === "arcade";
+    this.bar?.classList.toggle("arcade", arcade);
     const entry = state.scheduleIndex;
     this.refs.stage.textContent = state.phase === "wave" && state.activeWave ? state.activeWave.label : `Step ${entry + 1}`;
     this.refs.funds.textContent = `$${Math.floor(state.currency)}`;
     this.refs.score.textContent = String(Math.floor(state.score));
     const coordActive = state.brainUnlocked && !state.brainStaffDisabled;
     this.refs.coord.classList.toggle("on", coordActive);
+    // In the arcade act the coordination chip becomes the ARCADE / SURVIVE badge.
+    this.refs.coord.textContent = arcade ? "◆ ARCADE · SURVIVE" : "◈ COORDINATION ACTIVE";
+    this.refs.coord.classList.toggle("arcade", arcade);
     const frac = Math.max(0, state.integrity / state.maxIntegrity);
     this.refs.integfill.style.width = `${frac * 100}%`;
     this.refs.integfill.className = "integ-fill " + (frac > 0.5 ? "ok" : frac > 0.25 ? "warn" : "crit");
     this.refs.integnum.textContent = String(Math.max(0, Math.ceil(state.integrity)));
-    // Live drones-remaining hint during a wave.
-    if (state.phase === "wave" && state.rt && state.activeWave) {
+    if (arcade) {
+      const inbound = state.rt ? (state.activeWave ? state.activeWave.spawns.length - state.rt.spawnCursor : 0) + state.rt.drones.length : 0;
+      this.refs.stage.textContent = `◆ ARCADE · WAVE ${state.arcadeWave}${state.phase === "wave" ? ` · ${inbound} inbound` : ""}`;
+    } else if (state.phase === "wave" && state.rt && state.activeWave) {
+      // Live drones-remaining hint during an ops wave.
       const remaining = state.activeWave.spawns.length - state.rt.spawnCursor + state.rt.drones.length;
       this.refs.stage.textContent = `${state.activeWave.label} · ${remaining} inbound`;
     }
