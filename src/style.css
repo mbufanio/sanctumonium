@@ -182,6 +182,32 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ---- act break ("Future Systems Online") ------------------------------- */
+
+.accent-kicker { color: var(--brain); text-shadow: 0 0 18px rgba(0, 229, 255, 0.5); }
+.future-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+  max-width: 56rem;
+  margin: 1.8rem auto 1rem;
+}
+.future-card {
+  border: 1px solid var(--brain);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  background: rgba(0, 229, 255, 0.06);
+  text-align: left;
+  opacity: 0;
+  animation: rise 0.5s ease forwards;
+}
+.future-grid .future-card:nth-child(1) { animation-delay: 0.15s; }
+.future-grid .future-card:nth-child(2) { animation-delay: 0.35s; }
+.future-grid .future-card:nth-child(3) { animation-delay: 0.55s; }
+.fc-h { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.1em; color: var(--brain); margin-bottom: 0.4rem; }
+.fc-b { font-size: 0.92rem; color: var(--text); line-height: 1.4; }
+@media (max-width: 760px) { .future-grid { grid-template-columns: 1fr; } }
+
 .brain-boot {
   margin: 2.4rem auto 1.6rem;
   opacity: 0;
@@ -549,6 +575,10 @@ body {
   background: linear-gradient(0deg, rgba(6, 13, 21, 0.95), rgba(6, 13, 21, 0));
 }
 .build-hint { font-size: 0.85rem; color: var(--text-dim); font-family: var(--font); }
+/* Mid-wave "reinforce live" dock (arcade act): slimmer, accent-tinted, doesn't
+   block the action — it sits low and translucent so the fight stays visible. */
+.build-dock.mid-wave { background: linear-gradient(0deg, rgba(6, 13, 21, 0.82), rgba(6, 13, 21, 0)); padding-bottom: 0.7rem; }
+.build-dock.mid-wave .build-hint { color: var(--brain); letter-spacing: 0.04em; }
 .palette { pointer-events: auto; display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: center; }
 .pal-card {
   pointer-events: auto;

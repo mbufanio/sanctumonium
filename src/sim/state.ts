@@ -21,7 +21,16 @@ export type AppPhase =
   | "wave" // a real-time auto-defense wave is running
   | "boss" // an active assignment minigame (brain flag decides off/on)
   | "unlock" // the brain unlock beat between boss 1 and boss 2
+  | "actbreak" // "Future Systems Online" beat after boss 2 — into the arcade act
   | "summary"; // run over — final score
+
+/**
+ * The run is two acts (spec intent): "ops" is the realistic value-prop phase
+ * (grounded + near-future gear, build between waves only) where coordination is
+ * the hero; "arcade" is the post-Boss-#2 fictional payoff (tier-3 weapons,
+ * build on the fly, pure shoot-em-up). The act break is the transition.
+ */
+export type Act = "ops" | "arcade";
 
 export interface BossSession {
   cfg: BossConfig;
@@ -34,6 +43,8 @@ export interface BossSession {
 
 export interface GameState {
   phase: AppPhase;
+  /** Which act we're in — gates the fictional gear and mid-wave building. */
+  act: Act;
   level: LevelDef;
   /** Sim time in seconds (fixed-timestep accumulator output). */
   time: number;
@@ -118,6 +129,7 @@ export function createInitialState(level: LevelDef): GameState {
   ];
   return {
     phase: "title",
+    act: "ops",
     level,
     time: 0,
     placed,

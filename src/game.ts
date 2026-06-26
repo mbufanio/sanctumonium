@@ -79,6 +79,7 @@ export class Game {
     this.screens = new Screens(overlay, {
       onStart: () => this.startRun(),
       onUnlockContinue: () => this.afterUnlock(),
+      onActBreakContinue: () => this.afterActBreak(),
       onRestart: () => this.restart(),
     });
     this.hud = new Hud(overlay, {
@@ -122,7 +123,11 @@ export class Game {
       }
       this.world.setSelected(this.state.selectedDeviceId);
       this.world.update(this.state);
-      if (this.state.phase === "build" || this.state.phase === "wave") this.hud.update(this.state);
+      if (this.state.phase === "build" || this.state.phase === "wave") {
+        this.hud.update(this.state);
+        // Arcade mid-wave dock: keep weapon affordability live as kills pay out.
+        if (this.state.phase === "wave" && this.state.act === "arcade") this.hud.refreshAffordability(this.state);
+      }
     });
   }
 
@@ -212,12 +217,14 @@ export class Game {
   /** Recompute the brain recommendation (after unlock) and (re)render the dock. */
   private refreshBuildDock(): void {
     const s = this.state;
-    if (s.phase !== "build") return;
+    const midWave = s.phase === "wave" && s.act === "arcade";
+    if (s.phase !== "build" && !midWave) return;
+    // Recommendations are a between-waves planning aid only (not mid-fight).
     this.currentRec =
-      s.brainUnlocked && !s.brainStaffDisabled && !this.recDismissed
+      !midWave && s.brainUnlocked && !s.brainStaffDisabled && !this.recDismissed
         ? recommendPlacement(s.placed, s.currency, this.world.spawnRadius(s), s.level.rings, this.terrain, new Set(this.terrain.keys()))
         : null;
-    this.hud.showBuild(s, this.nextEntryLabel(), this.currentRec);
+    this.hud.showBuild(s, this.nextEntryLabel(), this.currentRec, midWave);
   }
 
   private nextEntryLabel(): string {
@@ -241,10 +248,14 @@ export class Game {
       // Adaptive enemy: bias this wave's spawns toward the layout's seams.
       s.activeWave = adaptWave(entry.wave, s.placed, this.world.spawnRadius(s), this.rng, this.terrain);
       for (const d of s.placed) d.cooldown = 0;
-      s.selectedPlaceable = null;
       s.selectedDeviceId = null;
       this.world.setGhost(null);
-      this.hud.hideBuild();
+      // Arcade act: keep the build dock up so the player can reinforce live.
+      if (s.act === "arcade") this.refreshBuildDock();
+      else {
+        s.selectedPlaceable = null;
+        this.hud.hideBuild();
+      }
     } else {
       this.startBoss(entry.bossIndex);
     }
@@ -297,10 +308,14 @@ export class Game {
       this.console.clear();
       this.screens.unlock();
     } else {
+      // Boss #2 cleared → coordination is proven. Cross the act break into the
+      // fictional arcade act (tier-3 gear + build-on-the-fly).
       s.log.boss2 = session.result ?? undefined;
       this.console.clear();
-      s.scheduleIndex++;
-      this.enterBuild();
+      this.hud.clear();
+      s.act = "arcade";
+      s.phase = "actbreak";
+      this.screens.actBreak();
     }
   }
 
@@ -309,6 +324,13 @@ export class Game {
     s.brainUnlocked = true;
     this.screens.clear();
     s.scheduleIndex++;
+    this.enterBuild();
+  }
+
+  /** Continue out of the "Future Systems Online" act break into the arcade act. */
+  private afterActBreak(): void {
+    this.screens.clear();
+    this.state.scheduleIndex++;
     this.enterBuild();
   }
 
@@ -402,6 +424,16 @@ export class Game {
     this.refreshBuildDock();
   }
 
+  /**
+   * Can the player place/manage devices right now? Between waves always; DURING
+   * a wave only in the arcade act (build-on-the-fly is the late-game payoff —
+   * the realistic ops act keeps building to the planning window on purpose).
+   */
+  private canBuild(): boolean {
+    const p = this.state.phase;
+    return p === "build" || (p === "wave" && this.state.act === "arcade");
+  }
+
   private installInput(): void {
     const canvas = this.world.app.canvas;
     const toHex = (e: PointerEvent): Hex => {
@@ -409,11 +441,11 @@ export class Game {
       return this.world.screenToHex(e.clientX - rect.left, e.clientY - rect.top);
     };
     canvas.addEventListener("pointerdown", (e) => {
-      if (this.state.phase !== "build") return;
+      if (!this.canBuild()) return;
       this.handleFieldTap(toHex(e as PointerEvent));
     });
     canvas.addEventListener("pointermove", (e) => {
-      if (this.state.phase !== "build") return;
+      if (!this.canBuild()) return;
       this.pointerHex = toHex(e as PointerEvent);
       this.updateGhost();
     });
@@ -479,7 +511,7 @@ export class Game {
 
   private updateGhost(): void {
     const s = this.state;
-    if (s.phase !== "build" || !s.selectedPlaceable || !this.pointerHex) {
+    if (!this.canBuild() || !s.selectedPlaceable || !this.pointerHex) {
       this.world.setGhost(null);
       return;
     }
@@ -633,6 +665,9 @@ export class Game {
         break;
       case "unlock":
         this.afterUnlock();
+        break;
+      case "actbreak":
+        this.afterActBreak();
         break;
       case "title":
       case "summary":

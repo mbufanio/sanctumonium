@@ -89,11 +89,16 @@ export class Hud {
     }
   }
 
-  /** Show the between-waves build dock. */
-  showBuild(state: GameState, nextLabel: string, rec: Recommendation | null): void {
+  /**
+   * Show the build dock. Between waves it has the "start wave" button and the
+   * brain recommendation; mid-wave (arcade act) it's a compact "reinforce" dock
+   * — palette only, no start button — so the player deploys live without
+   * pausing the fight.
+   */
+  showBuild(state: GameState, nextLabel: string, rec: Recommendation | null, midWave = false): void {
     this.ensureBar();
     this.dock?.remove();
-    const dock = el("div", "build-dock");
+    const dock = el("div", "build-dock" + (midWave ? " mid-wave" : ""));
 
     const selDev = state.selectedDeviceId ? state.placed.find((d) => d.id === state.selectedDeviceId) ?? null : null;
     if (selDev) {
@@ -104,9 +109,11 @@ export class Hud {
       if (rec) dock.append(this.recCard(rec, state));
 
       const hint = el("div", "build-hint");
-      hint.textContent = state.selectedPlaceable
-        ? "Tap the field to place · tap a placed device to upgrade it"
-        : "Pick a device to place, or tap a placed device to upgrade";
+      hint.textContent = midWave
+        ? "◈ DEPLOY LIVE — tap a weapon, then tap the field to reinforce"
+        : state.selectedPlaceable
+          ? "Tap the field to place · tap a placed device to upgrade it"
+          : "Pick a device to place, or tap a placed device to upgrade";
       dock.append(hint);
 
       const palette = el("div", "palette");
@@ -117,10 +124,12 @@ export class Hud {
       dock.append(palette);
     }
 
-    const start = el("button", "btn-start") as HTMLButtonElement;
-    start.innerHTML = `<span>${nextLabel}</span><span class="start-arrow">▶</span>`;
-    start.onclick = () => this.cb.onStartWave();
-    dock.append(start);
+    if (!midWave) {
+      const start = el("button", "btn-start") as HTMLButtonElement;
+      start.innerHTML = `<span>${nextLabel}</span><span class="start-arrow">▶</span>`;
+      start.onclick = () => this.cb.onStartWave();
+      dock.append(start);
+    }
 
     this.root.append(dock);
     this.dock = dock;
@@ -191,6 +200,8 @@ export class Hud {
     const afford = state.currency >= p.cost;
     const sel = state.selectedPlaceable === p.id;
     const card = el("button", "pal-card" + (sel ? " sel" : "") + (afford ? "" : " poor") + ` k-${p.kind}`) as HTMLButtonElement;
+    card.dataset.pid = p.id;
+    card.dataset.cost = String(p.cost);
     card.disabled = !afford;
     card.onclick = () => this.cb.onSelectPlaceable(p.id);
     card.innerHTML = `
@@ -199,6 +210,21 @@ export class Hud {
       <div class="pal-role">${p.role}</div>
     `;
     return card;
+  }
+
+  /**
+   * Cheaply re-sync palette affordability to live currency (no DOM rebuild) so
+   * the mid-wave "reinforce" dock lights up cards as kills earn money.
+   */
+  refreshAffordability(state: GameState): void {
+    if (!this.dock) return;
+    this.dock.querySelectorAll<HTMLButtonElement>(".pal-card").forEach((card) => {
+      const cost = Number(card.dataset.cost ?? "0");
+      const afford = state.currency >= cost;
+      const selected = card.classList.contains("sel");
+      card.disabled = !afford && !selected;
+      card.classList.toggle("poor", !afford);
+    });
   }
 }
 

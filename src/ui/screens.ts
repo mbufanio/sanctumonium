@@ -8,6 +8,7 @@ import type { LevelDef } from "../sim/level.ts";
 export interface ScreenCallbacks {
   onStart(): void;
   onUnlockContinue(): void;
+  onActBreakContinue(): void;
   onRestart(): void;
 }
 
@@ -84,6 +85,31 @@ export class Screens {
     `;
     const btn = button("Re-engage", "screen-cta accent-cta");
     btn.onclick = () => this.cb.onUnlockContinue();
+    s.append(btn);
+    this.root.append(s);
+  }
+
+  /**
+   * The act break after Boss #2: coordination is proven, so the brief shifts
+   * from "sell the value" to "now field the next generation". Unlocks tier-3
+   * fictional gear and arcade rules (build on the fly).
+   */
+  actBreak(): void {
+    this.clear();
+    const s = screen("actbreak-screen");
+    s.innerHTML = `
+      <div class="screen-kicker accent-kicker">◈ COORDINATION PROVEN</div>
+      <h1 class="screen-h1">Future Systems Online.</h1>
+      <h2 class="screen-h2">The coordination layer is cleared to drive the next-gen arsenal.</h2>
+      <div class="future-grid">
+        <div class="future-card"><div class="fc-h">DIRECTED-ENERGY &amp; PLASMA</div><div class="fc-b">High-end effectors come online — area weapons that clear whole clusters.</div></div>
+        <div class="future-card"><div class="fc-h">FIELD ON THE FLY</div><div class="fc-b">No more waiting between waves — deploy reinforcements live as the fight unfolds.</div></div>
+        <div class="future-card"><div class="fc-h">OVERWHELM INBOUND</div><div class="fc-b">The threat scales to a swarm. Your coordinated grid scales to meet it.</div></div>
+      </div>
+      <p class="screen-body">You proved the brain. Now see what it can really do.</p>
+    `;
+    const btn = button("Go loud", "screen-cta accent-cta");
+    btn.onclick = () => this.cb.onActBreakContinue();
     s.append(btn);
     this.root.append(s);
   }
