@@ -47,6 +47,8 @@ export interface Drone {
   // ---- kill chain (spec: detect → classify/ID → track → engage) ----------
   /** A sensor has a return on it (a blip), even if it can't classify it. */
   detected: boolean;
+  /** Sim time of first detection (-1 until detected) — for time-to-track stats. */
+  detectedAt: number;
   /** Classification confidence [0..1]; rises while a CAPABLE sensor covers it. */
   idConf: number;
   /** Fire-control track: detected AND classified past threshold. The thing an

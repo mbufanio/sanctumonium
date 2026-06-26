@@ -219,6 +219,17 @@ body {
 .north-star .ns-tag { color: var(--brain-gold); }
 .unlock-ns { opacity: 0; animation: rise 0.8s ease forwards; animation-delay: 3.6s; }
 
+/* Before/after proof panel at the act break (ACT1 spec §3c) — the player's own
+   numbers, which is far more persuasive than canned figures. */
+.ba-panel { max-width: 34rem; margin: 1.4rem auto 0.4rem; }
+.ba-head { font-size: 0.9rem; color: var(--brain); margin-bottom: 0.7rem; }
+.ba-table { width: 100%; border-collapse: collapse; font-family: var(--mono); }
+.ba-table th, .ba-table td { padding: 0.5rem 0.8rem; text-align: right; font-size: 1.05rem; }
+.ba-table th { font-size: 0.7rem; letter-spacing: 0.14em; color: var(--text-dim); font-weight: 700; }
+.ba-table td:first-child, .ba-table th:first-child { text-align: left; color: var(--text-dim); font-family: var(--font); font-size: 0.92rem; }
+.ba-table tr { border-bottom: 1px solid var(--panel-edge); }
+.ba-table .ba-after { color: var(--brain); font-weight: 800; }
+
 .boss-title-wrap { display: flex; flex-direction: column; gap: 0.25rem; }
 .boss-vega { font-size: 0.85rem; color: var(--brain); opacity: 0.9; }
 .boss-vega:empty { display: none; }

@@ -68,6 +68,12 @@ export interface LeakInfo {
 export interface StepResult {
   kills: KillInfo[];
   leaks: LeakInfo[];
+  /** Effector fires this step (one per weapon that pulled the trigger). */
+  shotsFired: number;
+  /** Fires that killed nothing — bad matchup or a miss (the cost of no fusion). */
+  shotsWasted: number;
+  /** Time-to-track (detect → fire-control) for drones that locked this step. */
+  idTimes: number[];
   /** True once the wave's spawns are exhausted and no drones remain alive. */
   waveComplete: boolean;
 }
@@ -83,6 +89,9 @@ export function stepWave(
   rt.time += dt;
   const kills: KillInfo[] = [];
   const leaks: LeakInfo[] = [];
+  const idTimes: number[] = [];
+  let shotsFired = 0;
+  let shotsWasted = 0;
   const terrain = env.terrain ?? NO_TERRAIN;
 
   // 1. Spawn any drones whose scheduled time has arrived.
@@ -119,11 +128,14 @@ export function stepWave(
         if (q > best) best = q;
       }
     }
+    if (detected && d.detectedAt < 0) d.detectedAt = rt.time; // first return
     const classRate = env.coordinated ? fused : best;
     if (classRate > 0) d.idConf = Math.min(1, d.idConf + classRate * ID_GAIN * dt);
     else if (!detected) d.idConf = Math.max(0, d.idConf - ID_DECAY * dt);
     d.detected = detected;
+    const wasTracked = d.tracked;
     d.tracked = detected && d.idConf >= ID_THRESHOLD;
+    if (d.tracked && !wasTracked && d.detectedAt >= 0) idTimes.push(rt.time - d.detectedAt);
 
     if (planeLen(d.pos) <= LEAK_RADIUS) {
       d.state = "leaked";
@@ -142,17 +154,19 @@ export function stepWave(
   //    WITH the brain (env.coordinated), fire is DECONFLICTED: a drone already
   //    claimed this step is skipped, so the same hardware kills more per volley.
   const claimed = env.coordinated ? new Set<number>() : null;
-  const resolveHit = (e: PlacedDevice, d: Drone) => {
+  const resolveHit = (e: PlacedDevice, d: Drone): boolean => {
     let p = hitChance(e.effect[d.typeId], d.tracked);
     if (env.coordinated && p > 0) p = Math.min(0.98, p * COORD_ACCURACY);
-    if (!rng.chance(p)) return;
+    if (!rng.chance(p)) return false;
     d.hp -= 1;
     if (d.hp <= 0) {
       d.state = "killed";
       rt.killed++;
       kills.push({ typeId: d.typeId, bounty: d.bounty, tracked: d.tracked, pos: d.pos });
       rt.fx.push({ kind: "kill", at: d.pos, bounty: d.bounty });
+      return true;
     }
+    return false;
   };
 
   for (const e of effectors) {
@@ -161,17 +175,17 @@ export function stepWave(
     const target = pickTarget(rt.drones, e, claimed, terrain, !!env.coordinated);
     if (!target) continue;
     if (claimed) claimed.add(target.id);
+    e.cooldown = e.fireInterval;
+    shotsFired++;
     // Uncoordinated, a unit can't classify before it shoots — so it fires even
     // at a drone its weapon can't beat (a jammer at an autonomy drone), burning
     // the cooldown for nothing. The fx shows the miss; the lesson lands.
-    const wasted = e.effect[target.typeId] <= 0;
-    if (wasted) {
-      e.cooldown = e.fireInterval;
+    if (e.effect[target.typeId] <= 0) {
+      shotsWasted++;
       rt.fx.push({ kind: "shot", from: e.pos, to: target.pos, effector: e.placeableId, hit: false });
       continue;
     }
 
-    e.cooldown = e.fireInterval;
     // Coordination handoff: show the sensor passing the track to this effector.
     if (env.coordinated && target.tracked) {
       const s = trackingSensor(target, sensors, terrain);
@@ -179,6 +193,7 @@ export function stepWave(
     }
     rt.fx.push({ kind: "shot", from: e.pos, to: target.pos, effector: e.placeableId, hit: true });
 
+    let killedThisFire = 0;
     if (e.aoe > 0) {
       // Area soft-kill: everything affectable within the blast takes the shot.
       rt.fx.push({ kind: "aoe", at: target.pos, radius: e.aoe, effector: e.placeableId });
@@ -186,18 +201,21 @@ export function stepWave(
         if (d.state !== "alive") continue;
         if (e.effect[d.typeId] <= 0) continue;
         if (planeDist(target.pos, d.pos) > e.aoe) continue;
-        resolveHit(e, d);
+        if (resolveHit(e, d)) killedThisFire++;
       }
     } else {
-      resolveHit(e, target);
+      if (resolveHit(e, target)) killedThisFire++;
     }
+    // A fire that downed nothing (a miss) is wasted throughput — the thing
+    // coordination minimises (good matchup + fire-control track + accuracy).
+    if (killedThisFire === 0) shotsWasted++;
   }
 
   // 4. Reap resolved drones.
   rt.drones = rt.drones.filter((d) => d.state === "alive");
 
   const waveComplete = rt.spawnCursor >= wave.spawns.length && rt.drones.length === 0;
-  return { kills, leaks, waveComplete };
+  return { kills, leaks, shotsFired, shotsWasted, idTimes, waveComplete };
 }
 
 /**
@@ -273,6 +291,7 @@ function spawnDrone(rt: RealtimeState, s: SpawnEntry, spawnRadius: number): Dron
     leakDamage: spec.leakDamage * (m.leakMul ?? 1),
     state: "alive",
     detected: false,
+    detectedAt: -1,
     idConf: 0,
     tracked: false,
     trackId: id,

@@ -87,6 +87,24 @@ export interface GameState {
   // Run outcome.
   victory: boolean;
   log: { boss1?: EncounterResult; boss2?: EncounterResult };
+
+  /** Real-time tallies bucketed by coordination state, for the act-break
+   *  before/after panel (ACT1 spec §3) — the player's own proof. */
+  coordStats: { pre: WindowStats; post: WindowStats };
+}
+
+/** Per-window real-time tallies (pre- vs post-coordination). */
+export interface WindowStats {
+  leaks: number;
+  shotsFired: number;
+  shotsWasted: number;
+  /** Sum + count of time-to-track samples (mean = sum/count). */
+  idSum: number;
+  idCount: number;
+}
+
+function emptyWindow(): WindowStats {
+  return { leaks: 0, shotsFired: 0, shotsWasted: 0, idSum: 0, idCount: 0 };
 }
 
 let deviceSeq = 0;
@@ -157,5 +175,6 @@ export function createInitialState(level: LevelDef): GameState {
     boss: null,
     victory: false,
     log: {},
+    coordStats: { pre: emptyWindow(), post: emptyWindow() },
   };
 }

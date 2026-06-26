@@ -14,6 +14,13 @@ export interface ScreenCallbacks {
   onRestart(): void;
 }
 
+/** The player's own pre/post-coordination numbers (ACT1 spec §3c). [pre, post] */
+export interface BeforeAfter {
+  leaks: [string, string];
+  wasted: [string, string];
+  timeToId: [string, string];
+}
+
 export class Screens {
   private root: HTMLElement;
   private cb: ScreenCallbacks;
@@ -98,14 +105,27 @@ export class Screens {
    * from "sell the value" to "now field the next generation". Unlocks tier-3
    * fictional gear and arcade rules (build on the fly).
    */
-  actBreak(): void {
+  actBreak(stats?: BeforeAfter): void {
     this.clear();
     const s = screen("actbreak-screen");
+    const ba = stats
+      ? `
+      <div class="ba-panel">
+        <div class="ba-head">◈ VEGA: Same gear both halves. Only thing that changed was the brain.</div>
+        <table class="ba-table">
+          <tr><th></th><th>BEFORE</th><th class="ba-after">AFTER</th></tr>
+          <tr><td>Leaks</td><td>${stats.leaks[0]}</td><td class="ba-after">${stats.leaks[1]}</td></tr>
+          <tr><td>Wasted shots</td><td>${stats.wasted[0]}</td><td class="ba-after">${stats.wasted[1]}</td></tr>
+          <tr><td>Avg time-to-ID</td><td>${stats.timeToId[0]}</td><td class="ba-after">${stats.timeToId[1]}</td></tr>
+        </table>
+      </div>`
+      : "";
     s.innerHTML = `
       <div class="screen-kicker accent-kicker">◈ COORDINATION PROVEN</div>
       <h1 class="screen-h1">Future Systems Online.</h1>
-      <h2 class="screen-h2">The coordination layer is cleared to drive the next-gen arsenal.</h2>
+      ${ba}
       <div class="north-star actbreak-ns">${NORTH_STAR}</div>
+      <h2 class="screen-h2">The coordination layer is cleared to drive the next-gen arsenal.</h2>
       <div class="future-grid">
         <div class="future-card"><div class="fc-h">DIRECTED-ENERGY &amp; PLASMA</div><div class="fc-b">High-end effectors come online — area weapons that clear whole clusters.</div></div>
         <div class="future-card"><div class="fc-h">FIELD ON THE FLY</div><div class="fc-b">No more waiting between waves — deploy reinforcements live as the fight unfolds.</div></div>

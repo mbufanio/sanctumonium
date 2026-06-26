@@ -29,7 +29,7 @@ import { adaptWave, recommendPlacement, type Recommendation } from "./sim/realti
 import { computeOptimal, emptyAssignment, resolveEncounter } from "./sim/boss/engine.ts";
 import { WorldRenderer } from "./render/world.ts";
 import { BossConsole } from "./ui/bossConsole.ts";
-import { Screens } from "./ui/screens.ts";
+import { Screens, type BeforeAfter } from "./ui/screens.ts";
 import { Hud } from "./ui/hud.ts";
 import { Operator } from "./ui/operator.ts";
 import { LeaderboardUI } from "./ui/leaderboard.ts";
@@ -158,6 +158,15 @@ export class Game {
       s.leaked++;
       // Airport wrinkle (spec §9): a leak also disrupts operations → score hit.
       s.score = Math.max(0, s.score - s.level.leakScorePenalty);
+    }
+    // Bucket the kill-chain tallies by coordination state (ACT1 spec §3) — only
+    // through Act 1 (the arcade is out of scope for the before/after proof).
+    if (s.act === "ops") {
+      const w = s.brainUnlocked ? s.coordStats.post : s.coordStats.pre;
+      w.leaks += res.leaks.length;
+      w.shotsFired += res.shotsFired;
+      w.shotsWasted += res.shotsWasted;
+      for (const t of res.idTimes) { w.idSum += t; w.idCount++; }
     }
     if (s.integrity <= 0) {
       s.integrity = 0;
@@ -413,8 +422,22 @@ export class Game {
       this.hud.clear();
       s.act = "arcade";
       s.phase = "actbreak";
-      this.screens.actBreak();
+      this.screens.actBreak(this.beforeAfterStats());
     }
+  }
+
+  /** The player's own pre/post-coordination numbers for the act-break panel. */
+  private beforeAfterStats(): BeforeAfter {
+    const { pre, post } = this.state.coordStats;
+    const wasted = (w: { shotsFired: number; shotsWasted: number }) =>
+      w.shotsFired > 0 ? `${Math.round((100 * w.shotsWasted) / w.shotsFired)}%` : "—";
+    const ttid = (w: { idSum: number; idCount: number }) =>
+      w.idCount > 0 ? `${(w.idSum / w.idCount).toFixed(1)}s` : "—";
+    return {
+      leaks: [String(pre.leaks), String(post.leaks)],
+      wasted: [wasted(pre), wasted(post)],
+      timeToId: [ttid(pre), ttid(post)],
+    };
   }
 
   private afterUnlock(): void {
