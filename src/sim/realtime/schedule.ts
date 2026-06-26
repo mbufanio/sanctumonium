@@ -58,12 +58,17 @@ export function offsetWave(wave: WaveDef, delta: number): WaveDef {
  * biases them toward the player's seams).
  */
 export function makeArcadeWave(n: number): WaveDef {
-  const total = 6 + Math.round(n * 2.4) + Math.round(Math.max(0, n - 18) * 2.5); // accelerates late
-  const speed = 1 + n * 0.07; // everything gets faster
-  const gap = Math.max(0.05, 0.45 - n * 0.02); // and arrives DENSER each wave
-  // Hardened bodies ramp in from ~wave 10 — late drones survive a single hit,
-  // so even one-shot area weapons can't clear the swarm forever.
-  const hpMul = 1 + Math.floor(Math.max(0, n - 9) / 7);
+  // Escalation is QUADRATIC in count and EXPONENTIAL in density, so the curve
+  // bends up hard through the mid game: a casually-built grid is overwhelmed in
+  // a couple of minutes (we want to get to the sales conversation, not run a
+  // 10-minute survival marathon), while a try-hard optimal grid still lasts
+  // meaningfully longer.
+  const total = 5 + Math.round(2 * n + 0.22 * n * n);
+  const speed = 1 + n * 0.085; // everything gets faster
+  const gap = Math.max(0.045, 0.5 * Math.pow(0.92, n)); // and arrives much DENSER each wave
+  // Hardened bodies ramp in from ~wave 7 — late drones survive a single hit, so
+  // even one-shot area weapons can't clear the swarm forever.
+  const hpMul = 1 + Math.floor(Math.max(0, n - 6) / 5);
   const swarmy = n >= 3;
   const spawns: SpawnEntry[] = [];
   for (let i = 0; i < total; i++) {
