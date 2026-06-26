@@ -873,7 +873,9 @@ body {
 .tk-stat { background: rgba(0,0,0,0.25); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 0.6rem 0.8rem; }
 .tk-stat-v { font-size: 1.5rem; font-weight: 800; color: var(--text); }
 .tk-stat-k { font-size: 0.74rem; color: var(--text-dim); }
-.tk-line { font-size: 0.85rem; color: var(--brain); line-height: 1.4; margin-bottom: 0.8rem; }
+.tk-northstar { font-size: 0.98rem; font-weight: 700; color: var(--brain); line-height: 1.4; margin: 0.4rem 0 0.5rem; text-shadow: 0 0 14px rgba(0, 229, 255, 0.3); }
+.tk-line { font-size: 0.85rem; color: var(--text-dim); line-height: 1.4; margin-bottom: 0.8rem; }
+.tk-line b { color: var(--text); }
 .tk-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
 .tk-download { pointer-events: auto; cursor: pointer; font-family: var(--font); font-weight: 700; border: none; border-radius: 9px; min-height: 44px; padding: 0 1rem; color: #04222b; background: linear-gradient(180deg, #7fe7ff, var(--friendly)); }
 .tk-email { flex: 1; min-width: 160px; min-height: 44px; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 9px; color: var(--text); padding: 0 0.7rem; font-size: 0.9rem; }

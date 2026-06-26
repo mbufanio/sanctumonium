@@ -95,6 +95,7 @@ export class WorldRenderer {
   private trails = new Map<number, Px[]>();
   private seenDrones = new Set<number>();
   private ghost: Ghost | null = null;
+  private guideHex: Hex | null = null;
   private mounted = false;
   private dangerEl: HTMLDivElement | null = null;
   private selectedId: string | null = null;
@@ -163,6 +164,11 @@ export class WorldRenderer {
     this.ghost = ghost;
   }
 
+  /** A pulsing "place here" marker for the guided first placement (ACT1 §4). */
+  setGuide(hex: Hex | null): void {
+    this.guideHex = hex;
+  }
+
   drawStatic(state: GameState): void {
     const lvl = state.level;
     this.ground.clear();
@@ -195,7 +201,7 @@ export class WorldRenderer {
     this.drawRadarPings(state);
     this.drawCoverage(state);
     this.drawAsset(state);
-    this.drawGhost();
+    this.drawGhost(state);
     this.syncDeviceLabels(state);
     this.drawDrones(state);
     this.drawFx(state);
@@ -287,8 +293,17 @@ export class WorldRenderer {
     }
   }
 
-  private drawGhost(): void {
+  private drawGhost(state: GameState): void {
     this.ghostGfx.clear();
+    // Guided "place here" marker — a pulsing gold target on the suggested hex.
+    if (this.guideHex) {
+      const g = hexToPixel(this.guideHex);
+      const pulse = 0.5 + 0.5 * Math.sin(state.time * 4);
+      this.hexTile(this.ghostGfx, g, COLORS.brainGold, COLORS.brainGold, 0.12 + 0.1 * pulse);
+      this.ghostGfx
+        .ellipse(g.x, g.y, HEX_SIZE * (1.1 + pulse * 0.35), HEX_SIZE * (1.1 + pulse * 0.35) * ISO_SQUASH)
+        .stroke({ color: COLORS.brainGold, width: 2, alpha: 0.4 + 0.4 * pulse });
+    }
     if (!this.ghost) return;
     const s = hexToPixel(this.ghost.hex);
     const color = this.ghost.valid ? (this.ghost.kind === "sensor" ? COLORS.coverage : COLORS.friendly) : COLORS.bad;

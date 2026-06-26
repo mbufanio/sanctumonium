@@ -10,6 +10,7 @@
 import { AFFILIATIONS, type BoardKind, type RunStats, type ScoreEntry } from "../leaderboard/rules.ts";
 import { fetchBoard, submitScore, usingBackend, type SubmitResult } from "../leaderboard/client.ts";
 import { drawTakeawayPNG } from "./takeaway.ts";
+import { NORTH_STAR } from "./operator.ts";
 
 export interface LeaderboardCallbacks {
   onRestart(): void;
@@ -201,7 +202,8 @@ export class LeaderboardUI {
         ${stat("Boss · manual", `${stats.boss1Stopped}/4`)}
         ${stat("Boss · coordinated", `${stats.boss2Stopped}/4`)}
       </div>
-      <div class="tk-line">The coordinating intelligence you unlocked is real — ask our team for the live model.</div>
+      <div class="tk-northstar">${NORTH_STAR}</div>
+      <div class="tk-line"><b>The brain you just used is real.</b> Ask us to run your actual site.</div>
     `;
     const row = el("div", "tk-actions");
     const dl = button("Download report", "tk-download");

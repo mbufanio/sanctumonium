@@ -48,6 +48,9 @@ export class Game {
   private leaderboard: LeaderboardUI;
   /** Scripted Act-1 operator lines fire once per run (guard against replays). */
   private said = new Set<string>();
+  /** Guided first-placement (ACT1 §4 Beat 2): one-tap coaching, first build only. */
+  private guideActive = false;
+  private guideDone = false;
   private rng: Rng;
   private accumulator = 0;
   private currentBossIndex: 1 | 2 | null = null;
@@ -215,6 +218,9 @@ export class Game {
     this.terrain = buildTerrain(level.terrain);
     this.currentBossIndex = null;
     this.said.clear();
+    this.guideDone = false;
+    this.guideActive = false;
+    this.world.setGuide(null);
     this.world.drawStatic(this.state);
     this.screens.clear();
     // VEGA comes on station: site + stakes (ACT1 spec §2).
@@ -256,6 +262,28 @@ export class Game {
     this.recDismissed = false;
     this.operator.setSitrep(s.level.name, s.brainUnlocked ? "coordination active · build" : "grid hot · build");
     this.refreshBuildDock();
+    // First build of the run: coach a single placement so a cold visitor isn't
+    // dropped in (ACT1 §4, Beat 2). Skippable/non-blocking — placing anywhere,
+    // or starting the wave, ends it.
+    if (!this.guideDone && s.scheduleIndex === 0 && !this.attract) this.startGuided();
+  }
+
+  private startGuided(): void {
+    this.guideDone = true;
+    this.guideActive = true;
+    const s = this.state;
+    const target: Hex = { q: 0, r: -3 }; // north approach, ring 3, free
+    s.selectedPlaceable = "radar";
+    this.world.setGuide(target);
+    this.refreshBuildDock();
+    this.operator.say("Drop a radar on the north approach. That's where they'll come.");
+  }
+
+  private endGuided(): void {
+    if (!this.guideActive) return;
+    this.guideActive = false;
+    this.world.setGuide(null);
+    this.operator.say("Good. Rest of the grid is yours.");
   }
 
   /** Recompute the brain recommendation (after unlock) and (re)render the dock. */
@@ -300,6 +328,8 @@ export class Game {
       s.selectedDeviceId = null;
       s.selectedPlaceable = null;
       this.world.setGhost(null);
+      this.guideActive = false;
+      this.world.setGuide(null);
       // Ops act builds between waves only — the dock closes for the fight.
       this.hud.hideBuild();
       this.operator.setSitrep(s.level.name, "threat inbound");
@@ -617,6 +647,7 @@ export class Game {
     s.placed.push(makePlaced(p.id, hex));
     // Deselect if the next one is no longer affordable, else keep placing.
     if (s.currency < p.cost) s.selectedPlaceable = null;
+    this.endGuided(); // the first placement hands control back
     this.refreshBuildDock();
     this.updateGhost();
   }

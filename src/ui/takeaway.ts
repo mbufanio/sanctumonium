@@ -4,7 +4,24 @@
  * dependencies: drawn on a 2D canvas and downloaded as a data URL.
  */
 import { css, COLORS } from "../theme.ts";
+import { NORTH_STAR } from "./operator.ts";
 import type { RunStats } from "../leaderboard/rules.ts";
+
+/** Wrap text to a max width on a 2D context, returning the lines. */
+function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let line = "";
+  for (const w of words) {
+    const test = line ? `${line} ${w}` : w;
+    if (ctx.measureText(test).width > maxW && line) {
+      lines.push(line);
+      line = w;
+    } else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
 
 export function drawTakeawayPNG(stats: RunStats, rank: number | null, handle: string): void {
   const W = 1000;
@@ -86,14 +103,23 @@ export function drawTakeawayPNG(stats: RunStats, rank: number | null, handle: st
     ctx.fillText(r[0], x, ry + 34);
   });
 
-  // Footer line.
+  // The North Star — the one line the visitor carries back (ACT1 spec §1/§5).
   ctx.textAlign = "center";
   ctx.fillStyle = css(COLORS.brain);
-  ctx.font = "500 26px Inter, sans-serif";
-  ctx.fillText("The coordinating intelligence you unlocked is real.", cx, H - 150);
+  ctx.font = "700 30px Inter, sans-serif";
+  const nsLines = wrap(ctx, NORTH_STAR, W - 200);
+  let ny = H - 230;
+  for (const ln of nsLines) {
+    ctx.fillText(ln, cx, ny);
+    ny += 40;
+  }
+  // The conversion CTA (ACT1 spec §5).
+  ctx.fillStyle = css(COLORS.text);
+  ctx.font = "600 26px Inter, sans-serif";
+  ctx.fillText("The brain you just used is real.", cx, H - 130);
   ctx.fillStyle = css(COLORS.textDim);
   ctx.font = "400 24px Inter, sans-serif";
-  ctx.fillText("Ask our team for the live model demonstration.", cx, H - 112);
+  ctx.fillText("Ask us to run your actual site.", cx, H - 96);
 
   // Download.
   const url = c.toDataURL("image/png");
