@@ -10,20 +10,13 @@
  * Pure logic. Deterministic given an Rng. No rendering.
  */
 import { Rng } from "../rng.ts";
-import {
-  EFFECTOR_TYPES,
-  SENSOR_TYPES,
-  THREAT_TYPES,
-} from "./data.ts";
+import { THREAT_TYPES } from "./data.ts";
 import type {
   AssignmentMap,
   BossConfig,
-  DeviceUnit,
-  EffectorType,
   EncounterResult,
   Odds,
   OddsFactor,
-  SensorType,
   ThreatResult,
   ThreatUnit,
 } from "./types.ts";
@@ -31,12 +24,7 @@ import type {
 /** Multiplier applied to effectiveness when a threat is engaged but untracked. */
 const UNTRACKED_PENALTY = 0.35;
 
-function sensorType(u: DeviceUnit): SensorType {
-  return SENSOR_TYPES[u.typeId as keyof typeof SENSOR_TYPES];
-}
-function effectorType(u: DeviceUnit): EffectorType {
-  return EFFECTOR_TYPES[u.typeId as keyof typeof EFFECTOR_TYPES];
-}
+const EMPTY_MATRIX: Record<string, number> = {};
 
 /** Range factor: full effect inside range, graceful falloff just beyond it. */
 function rangeFactor(range: number, distance: number): number {
@@ -72,33 +60,30 @@ export function computeOdds(
     };
   }
 
-  const eff = effectorType(effUnit);
-
   // 1. Effector-vs-threat-type matchup (the headline factor).
-  const matchup = eff.effect[threat.typeId];
-  factors.push({ label: `${eff.name} vs ${tt.name}`, mult: matchup });
+  const matchup = (effUnit.effect ?? EMPTY_MATRIX)[threat.typeId] ?? 0;
+  factors.push({ label: `${effUnit.name} vs ${tt.name}`, mult: matchup });
   if (matchup <= 0.001) {
-    warnings.push(`${eff.name} has NO effect on a ${tt.name}.`);
+    warnings.push(`${effUnit.name} has NO effect on a ${tt.name}.`);
   }
 
   // 2. Range to target.
-  const rf = rangeFactor(eff.range, threat.distance);
-  factors.push({ label: `Range (${threat.distance.toFixed(1)}km / ${eff.range}km)`, mult: rf });
-  if (rf <= 0.001) warnings.push(`${threat.label} is outside ${eff.name} range.`);
+  const rf = rangeFactor(effUnit.range, threat.distance);
+  factors.push({ label: `Range (${threat.distance.toFixed(1)}km / ${effUnit.range.toFixed(1)}km)`, mult: rf });
+  if (rf <= 0.001) warnings.push(`${threat.label} is outside ${effUnit.name} range.`);
 
   // 3. Tracking quality from the assigned sensor.
   let trackMult = UNTRACKED_PENALTY;
   if (sensorId) {
     const senUnit = cfg.sensors.find((s) => s.id === sensorId);
     if (senUnit) {
-      const sen = sensorType(senUnit);
-      const q = sen.track[threat.typeId];
-      const senRf = rangeFactor(sen.range, threat.distance);
+      const q = (senUnit.track ?? EMPTY_MATRIX)[threat.typeId] ?? 0;
+      const senRf = rangeFactor(senUnit.range, threat.distance);
       if (q <= 0.001) {
-        warnings.push(`${sen.name} cannot track a ${tt.name}.`);
+        warnings.push(`${senUnit.name} cannot track a ${tt.name}.`);
         trackMult = UNTRACKED_PENALTY;
       } else if (senRf <= 0.001) {
-        warnings.push(`${threat.label} is beyond ${sen.name} range — weak track.`);
+        warnings.push(`${threat.label} is beyond ${senUnit.name} range — weak track.`);
         trackMult = UNTRACKED_PENALTY;
       } else {
         // Tracking lifts effectiveness from the untracked floor toward 1.0.
@@ -141,13 +126,13 @@ export function deconfliction(cfg: BossConfig, map: AssignmentMap): string[] {
   for (const [eid, ts] of effUse) {
     if (ts.length > 1) {
       const e = cfg.effectors.find((x) => x.id === eid)!;
-      msgs.push(`${effectorType(e).name} double-tasked on ${ts.join(" & ")} — split it.`);
+      msgs.push(`${e.name} double-tasked on ${ts.join(" & ")} — split it.`);
     }
   }
   for (const [sid, ts] of senUse) {
     if (ts.length > 1) {
       const s = cfg.sensors.find((x) => x.id === sid)!;
-      msgs.push(`${sensorType(s).name} can't track ${ts.join(" & ")} at once.`);
+      msgs.push(`${s.name} can't track ${ts.join(" & ")} at once.`);
     }
   }
   return msgs;
@@ -170,10 +155,33 @@ export function expectedStopped(cfg: BossConfig, map: AssignmentMap): number {
  * stopped, tie-breaking toward the worst-covered threat being as safe as
  * possible (robustness), which matches how a good operator actually thinks.
  */
+/** Best contribution a device could make to ANY threat (for candidate pruning). */
+function deviceRelevance(cfg: BossConfig, device: { range: number; effect?: Record<string, number>; track?: Record<string, number> }): number {
+  let best = 0;
+  for (const t of cfg.threats) {
+    const matrix = device.effect ?? device.track ?? {};
+    const q = (matrix[t.typeId] ?? 0) * rangeFactor(device.range, t.distance);
+    if (q > best) best = q;
+  }
+  return best;
+}
+
+/** Top-N device ids by relevance — bounds the optimizer when the roster is large. */
+function topCandidates(cfg: BossConfig, units: BossConfig["effectors"], n: number): string[] {
+  return [...units]
+    .sort((a, b) => deviceRelevance(cfg, b) - deviceRelevance(cfg, a))
+    .slice(0, n)
+    .map((u) => u.id);
+}
+
 export function computeOptimal(cfg: BossConfig): AssignmentMap {
   const threats = cfg.threats;
-  const effIds = cfg.effectors.map((e) => e.id);
-  const senIds = cfg.sensors.map((s) => s.id);
+  // Only ≤4 threats can be served, so the few best-matching devices per kind
+  // dominate any optimal plan. Capping the candidate pool keeps the exhaustive
+  // search instant even when the player has fielded a dozen+ devices.
+  const CAP = 6;
+  const effIds = cfg.effectors.length > CAP ? topCandidates(cfg, cfg.effectors, CAP) : cfg.effectors.map((e) => e.id);
+  const senIds = cfg.sensors.length > CAP ? topCandidates(cfg, cfg.sensors, CAP) : cfg.sensors.map((s) => s.id);
 
   let best: AssignmentMap | null = null;
   let bestScore = -1;

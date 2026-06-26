@@ -12,6 +12,7 @@
  */
 import type {
   BossConfig,
+  DeviceUnit,
   EffectorType,
   EffectorTypeId,
   SensorType,
@@ -89,6 +90,18 @@ export const EFFECTOR_TYPES: Record<EffectorTypeId, EffectorType> = {
   },
 };
 
+/** Build a sensor unit (canned fallback roster) with its resolved stats. */
+function sUnit(id: string, typeId: SensorTypeId, bearing: number, distance = 2): DeviceUnit {
+  const t = SENSOR_TYPES[typeId];
+  return { id, typeId, kind: "sensor", name: t.name, code: t.code, role: t.role, range: t.range, bearing, distance, track: { ...t.track } };
+}
+
+/** Build an effector unit (canned fallback roster) with its resolved stats. */
+function eUnit(id: string, typeId: EffectorTypeId, bearing: number, distance = 2): DeviceUnit {
+  const t = EFFECTOR_TYPES[typeId];
+  return { id, typeId, kind: "effector", name: t.name, code: t.code, role: t.role, range: t.range, bearing, distance, effect: { ...t.effect } };
+}
+
 /**
  * BOSS #1 — "the wall" (spec §6.1). Played WITHOUT the brain: odds hidden.
  *
@@ -110,14 +123,14 @@ export const BOSS_1: BossConfig = {
     { id: "t4", typeId: "low-observable", label: "Bandit-4", distance: 2.2, bearing: 150 },
   ],
   sensors: [
-    { id: "s-radar-1", typeId: "radar", bearing: 20 },
-    { id: "s-radar-2", typeId: "radar", bearing: 100 },
-    { id: "s-rfdf-1", typeId: "rf-df", bearing: 160 },
+    sUnit("s-radar-1", "radar", 20),
+    sUnit("s-radar-2", "radar", 100),
+    sUnit("s-rfdf-1", "rf-df", 160),
   ],
   effectors: [
-    { id: "e-net-1", typeId: "net-drone", bearing: 50 },
-    { id: "e-net-2", typeId: "net-drone", bearing: 130 },
-    { id: "e-jam-1", typeId: "rf-jammer", bearing: 90 },
+    eUnit("e-net-1", "net-drone", 50),
+    eUnit("e-net-2", "net-drone", 130),
+    eUnit("e-jam-1", "rf-jammer", 90),
   ],
 };
 
@@ -139,15 +152,15 @@ export const BOSS_2: BossConfig = {
     { id: "t4", typeId: "rf-quad", label: "Bandit-4", distance: 2.6, bearing: 155 },
   ],
   sensors: [
-    { id: "s-radar-1", typeId: "radar", bearing: 20 },
-    { id: "s-radar-2", typeId: "radar", bearing: 95 },
-    { id: "s-rfdf-1", typeId: "rf-df", bearing: 140 },
-    { id: "s-rfdf-2", typeId: "rf-df", bearing: 170 },
+    sUnit("s-radar-1", "radar", 20),
+    sUnit("s-radar-2", "radar", 95),
+    sUnit("s-rfdf-1", "rf-df", 140),
+    sUnit("s-rfdf-2", "rf-df", 170),
   ],
   effectors: [
-    { id: "e-net-1", typeId: "net-drone", bearing: 45 },
-    { id: "e-net-2", typeId: "net-drone", bearing: 125 },
-    { id: "e-jam-1", typeId: "rf-jammer", bearing: 80 },
-    { id: "e-net-3", typeId: "net-drone", bearing: 160 },
+    eUnit("e-net-1", "net-drone", 45),
+    eUnit("e-net-2", "net-drone", 125),
+    eUnit("e-jam-1", "rf-jammer", 80),
+    eUnit("e-net-3", "net-drone", 160),
   ],
 };

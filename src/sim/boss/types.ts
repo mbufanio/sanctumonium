@@ -56,12 +56,35 @@ export interface EffectorType {
   effect: Record<ThreatTypeId, number>;
 }
 
-/** A concrete sensor/effector unit available in this encounter. */
+/**
+ * A concrete sensor/effector unit available in this encounter.
+ *
+ * Carries its own resolved stats (matchup/track tables, range, labels) so the
+ * boss can field EVERY device the player built — including tier-2/3 gear and
+ * upgrades — without the engine looking anything up in the limited tier-1
+ * tables. Built from the real-time catalog (see schedule.bossConfigFromLayout)
+ * or from the boss data tables (the canned fallback rosters).
+ */
 export interface DeviceUnit {
   id: string;
-  typeId: SensorTypeId | EffectorTypeId;
+  /** The catalog placeable id (e.g. "radar", "aesa", "plasma"). */
+  typeId: string;
+  kind: "sensor" | "effector";
+  name: string;
+  /** Short uppercase tag for the scope (e.g. "RADAR", "AESA"). */
+  code: string;
+  /** One-line role. */
+  role: string;
+  /** Max effective range in abstract km (matches threat.distance units). */
+  range: number;
   /** Display position around the asset (bearing in degrees, 0 = north). */
   bearing: number;
+  /** Distance from centre in km — spreads markers on the scope (optional). */
+  distance?: number;
+  /** Effectors: single-shot effectiveness per threat type when tracked. */
+  effect?: Record<ThreatTypeId, number>;
+  /** Sensors: tracking quality per threat type (0 = cannot track). */
+  track?: Record<ThreatTypeId, number>;
 }
 
 /** A concrete incoming threat in this encounter. */

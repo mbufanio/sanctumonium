@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "../rng.ts";
-import { HEX_SIZE, hexKey, ringDistance, type Hex } from "../hex.ts";
+import { HEX_SIZE, hexKey, hexToPlane, ringDistance, type Hex } from "../hex.ts";
 import { LEVEL_1 } from "../level.ts";
 import { makePlaced } from "../state.ts";
 import { adaptWave, recommendPlacement, seamWeakness } from "./adaptive.ts";
@@ -60,4 +60,28 @@ describe("brain recommendation (spec §12 face 3)", () => {
   it("returns nothing when funds can't afford the fix", () => {
     expect(recommendPlacement(eastOnly, 0, SPAWN_RADIUS, LEVEL_1.rings)).toBeNull();
   });
+
+  it("points at a WEAK bearing, never stacks where already strong", () => {
+    // eastOnly defends the east; the seams are everywhere else. The brain must
+    // aim away from the defended east — the exact bug the player reported
+    // (it was piling devices onto the already-strong side).
+    const rec = recommendPlacement(eastOnly, 999, SPAWN_RADIUS, LEVEL_1.rings);
+    expect(rec).not.toBeNull();
+    // Never the already-strong east half.
+    expect(["E", "NE", "SE"]).not.toContain(rec!.compass);
+    // The recommended hex is NOT on the strong east side (positive-x).
+    expect(hexToPlane(rec!.hex).x).toBeLessThanOrEqual(0);
+    // And accepting it does not worsen that bearing's coverage.
+    const before = seamWeakness(eastOnly, SPAWN_RADIUS);
+    const bin = bearingBin(rec!.hex);
+    const after = seamWeakness([...eastOnly, dev("sensor", rec!.placeableId, rec!.hex)], SPAWN_RADIUS);
+    expect(after[bin]).toBeLessThanOrEqual(before[bin] + 1e-9);
+  });
 });
+
+/** Bearing bin (0..23) of a hex around the centre — mirrors adaptive's binning. */
+function bearingBin(h: Hex): number {
+  const p = hexToPlane(h);
+  const deg = ((Math.atan2(p.x, -p.y) * 180) / Math.PI + 360) % 360;
+  return Math.floor(deg / 15) % 24;
+}

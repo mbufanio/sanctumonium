@@ -16,7 +16,6 @@
  */
 import { Rng } from "../rng.ts";
 import {
-  HEX_SIZE,
   hexKey,
   hexRing,
   hexToPlane,
@@ -25,7 +24,7 @@ import {
   type Hex,
   type Px,
 } from "../hex.ts";
-import { LEAK_RADIUS, placeableById } from "./catalog.ts";
+import { LEAK_RADIUS, deviceStats, placeableById } from "./catalog.ts";
 import { losClear, type TerrainMap } from "../terrain.ts";
 import type { PlacedDevice, WaveDef } from "./types.ts";
 
@@ -153,9 +152,63 @@ function freeHexOnBearing(bearing: number, ring: number, occupied: Set<string>, 
 }
 
 /**
+ * Soft per-bearing coverage in [0..1]: along the approach, the average of
+ * "an effector can reach here" (weighted 0.55 — the actual killer) and "a
+ * sensor tracks here" (0.45). Unlike the strict AND in bearingStrength, this
+ * rewards PARTIAL progress, so the brain can give sound incremental advice:
+ * a seam with neither gets an effector first, then a sensor next round.
+ */
+function bearingCoverageSoft(placed: PlacedDevice[], spawnRadius: number, bearing: number, terrain: TerrainMap): number {
+  const sensors = placed.filter((p) => p.kind === "sensor");
+  const effectors = placed.filter((p) => p.kind === "effector");
+  let sum = 0;
+  let total = 0;
+  for (let r = spawnRadius; r >= LEAK_RADIUS; r -= 18) {
+    total++;
+    const p = pointAt(bearing, r);
+    if (inEffectorReach(p, effectors, terrain)) sum += 0.55;
+    if (trackedAt(p, sensors, terrain)) sum += 0.45;
+  }
+  return total ? sum / total : 0;
+}
+
+/** Total soft coverage over a set of bearing bins (the seam + its neighbours). */
+function windowCoverage(placed: PlacedDevice[], spawnRadius: number, bins: number[], terrain: TerrainMap): number {
+  let s = 0;
+  for (const b of bins) s += bearingCoverageSoft(placed, spawnRadius, (360 / BINS) * b, terrain);
+  return s;
+}
+
+/** A throwaway placed device (level 0) for evaluating a candidate placement. */
+function simDevice(placeableId: string, hex: Hex): PlacedDevice {
+  const pl = placeableById(placeableId)!;
+  const st = deviceStats(pl, 0);
+  return {
+    id: `sim-${placeableId}`,
+    kind: pl.kind,
+    placeableId,
+    hex,
+    pos: hexToPlane(hex),
+    level: 0,
+    radius: st.radius,
+    fireInterval: st.fireInterval,
+    aoe: st.aoe,
+    effect: st.effect,
+    track: st.track,
+    cooldown: 0,
+  };
+}
+
+/**
  * The brain's single best between-round suggestion, or null if the layout is
- * solid / nothing affordable. Prefers closing the worst kill-coverage seam;
- * failing that, giving a blind effector a sensor.
+ * solid / nothing affordable.
+ *
+ * It finds the genuinely weakest approach bearing, then SEARCHES candidate
+ * placements (a basic device on a free hex near that bearing, at several rings)
+ * and recommends the one that most improves coverage of that seam and its
+ * neighbours. Because it's measured by actual coverage gain, it never tells you
+ * to stack gear where you're already strong (that yields ~0 gain) — it always
+ * points at your real weak spot and the device that closes it.
  */
 export function recommendPlacement(
   placed: PlacedDevice[],
@@ -166,58 +219,47 @@ export function recommendPlacement(
   occupiedExtra: Set<string> = new Set(),
 ): Recommendation | null {
   const occupied = new Set([...placed.map((d) => hexKey(d.hex)), ...occupiedExtra]);
-  const effectors = placed.filter((p) => p.kind === "effector");
-  const sensors = placed.filter((p) => p.kind === "sensor");
 
-  // 1. Worst seam — is there an approach an effector can't even reach?
+  // Locate the weakest bearing (highest kill-coverage seam).
   const weak = seamWeakness(placed, spawnRadius, terrain);
   let worstBin = 0;
   for (let i = 1; i < weak.length; i++) if (weak[i] > weak[worstBin]) worstBin = i;
+  if (weak[worstBin] < 0.3) return null; // layout is solid — don't nag
+
   const worstBearing = (360 / BINS) * worstBin;
+  // Value the seam plus its immediate neighbours, so a recommendation that
+  // covers a swath beats one that plugs a single hairline gap.
+  const window = [worstBin, (worstBin + 1) % BINS, (worstBin + BINS - 1) % BINS, (worstBin + 2) % BINS, (worstBin + BINS - 2) % BINS];
+  const base = windowCoverage(placed, spawnRadius, window, terrain);
 
-  if (weak[worstBin] > 0.45) {
-    // Does that bearing lack effector reach, or just tracking?
-    const effReach = effectors.some((e) =>
-      planeDist(e.pos, pointAt(worstBearing, e.radius)) <= e.radius && bearingNear(e.hex, worstBearing),
-    );
-    const placeable = effReach ? "radar" : "net-drone";
-    const p = placeableById(placeable)!;
-    if (currency >= p.cost) {
-      const hex = freeHexOnBearing(worstBearing, effReach ? 4 : 3, occupied, maxRings);
-      if (hex) {
-        return {
-          placeableId: placeable,
-          hex,
-          compass: compassOf(worstBearing),
-          reason: effReach
-            ? `Threats from the ${compassOf(worstBearing)} aren't being tracked — add a Radar to lock them.`
-            : `The ${compassOf(worstBearing)} approach is wide open — drop a Net-Drone to cover it.`,
-        };
+  // Candidates the brain suggests: basic, affordable gear (a shooter and eyes).
+  const candIds = ["net-drone", "radar", "rf-jammer", "rf-df"].filter((id) => {
+    const p = placeableById(id);
+    return p && currency >= p.cost;
+  });
+  if (!candIds.length) return null;
+
+  let best: { id: string; hex: Hex } | null = null;
+  let bestGain = 0;
+  for (const id of candIds) {
+    for (const ring of [2, 3, 4, 5]) {
+      const hex = freeHexOnBearing(worstBearing, ring, occupied, maxRings);
+      if (!hex) continue;
+      const gain = windowCoverage([...placed, simDevice(id, hex)], spawnRadius, window, terrain) - base;
+      if (gain > bestGain + 1e-6) {
+        bestGain = gain;
+        best = { id, hex };
       }
     }
   }
 
-  // 2. A blind effector (no sensor overlap) — give it eyes.
-  const blind = effectors.find((e) => !sensors.some((s) => planeDist(s.pos, e.pos) <= s.radius));
-  if (blind) {
-    const p = placeableById("radar")!;
-    if (currency >= p.cost) {
-      const hex = freeHexOnBearing(bearingOfHex(blind.hex), Math.max(2, Math.round(planeLen(blind.pos) / (HEX_SIZE * 1.5))), occupied, maxRings);
-      if (hex) {
-        return {
-          placeableId: "radar",
-          hex,
-          compass: compassOf(bearingOfHex(blind.hex)),
-          reason: `Your ${placeableById(blind.placeableId)?.name} is firing blind — add a Radar nearby to track for it.`,
-        };
-      }
-    }
-  }
+  if (!best || bestGain < 0.04) return null; // nothing meaningfully helps here
 
-  return null;
-}
-
-function bearingNear(hex: Hex, bearing: number): boolean {
-  const err = Math.abs(((bearingOfHex(hex) - bearing + 540) % 360) - 180);
-  return err < 40;
+  const p = placeableById(best.id)!;
+  const compass = compassOf(worstBearing);
+  const reason =
+    p.kind === "sensor"
+      ? `Threats from the ${compass} aren't being tracked — add a ${p.name} there to lock them.`
+      : `The ${compass} approach is weakly covered — add a ${p.name} there to close it.`;
+  return { placeableId: best.id, hex: best.hex, compass, reason };
 }

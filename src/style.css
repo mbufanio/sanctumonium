@@ -238,6 +238,10 @@ body {
 
 /* ---- boss console ------------------------------------------------------- */
 
+/* The console owns this layout-neutral container so clearing it never wipes
+   sibling overlays (the HUD bar). */
+.boss-host { display: contents; }
+
 .boss {
   pointer-events: auto;
   width: 100%;
@@ -286,6 +290,9 @@ body {
   font-family: var(--mono);
   pointer-events: none;
 }
+/* Tappable scope markers — assign devices / select threats straight on the map. */
+.scope-dev.tappable, .scope-threat.tappable { cursor: pointer; }
+.scope-dev.tappable:hover, .scope-threat.tappable:hover { filter: brightness(1.25); }
 
 /* controls column */
 .boss-controls,

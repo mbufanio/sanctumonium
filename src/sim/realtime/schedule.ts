@@ -12,8 +12,8 @@
  */
 import { hexToPlane, planeLen } from "../hex.ts";
 import { BOSS_1, BOSS_2 } from "../boss/data.ts";
-import { BOSS_KNOWN } from "./catalog.ts";
-import type { BossConfig, DeviceUnit, EffectorTypeId, SensorTypeId } from "../boss/types.ts";
+import { RANGE_SCALE, deviceStats, placeableById } from "./catalog.ts";
+import type { BossConfig, DeviceUnit } from "../boss/types.ts";
 import type { ThreatTypeId } from "../boss/types.ts";
 import type { PlacedDevice, SpawnEntry, SpawnMods, WaveDef } from "./types.ts";
 
@@ -62,26 +62,46 @@ function bearingOfHex(d: PlacedDevice): number {
 }
 
 /**
+ * Build a boss DeviceUnit from a placed device, carrying its REAL catalog stats
+ * (matchup/track tables, range, upgrades) so the boss fields every device the
+ * player built — tier-2/3 gear and upgrades included. Range/distance are in
+ * abstract km (plane units / RANGE_SCALE) to match the threat distances.
+ */
+function unitFromPlaced(p: PlacedDevice, id: string): DeviceUnit {
+  const pl = placeableById(p.placeableId)!;
+  const st = deviceStats(pl, p.level);
+  return {
+    id,
+    typeId: p.placeableId,
+    kind: pl.kind,
+    name: pl.name,
+    code: pl.code,
+    role: pl.role,
+    range: st.radius / RANGE_SCALE,
+    bearing: bearingOfHex(p),
+    distance: planeLen(hexToPlane(p.hex)) / RANGE_SCALE,
+    effect: pl.kind === "effector" ? st.effect : undefined,
+    track: pl.kind === "sensor" ? st.track : undefined,
+  };
+}
+
+/**
  * Build a boss encounter from the player's placed layout (spec §14 Phase 2).
  * The threats and tolerance come from the Phase-1 boss config; the sensors and
- * effectors are the player's actual placements (capped for readability). If the
- * player somehow has none of a kind, fall back to the canned roster so the
- * fight is still playable.
+ * effectors are EVERY device the player actually placed (with their real stats,
+ * so a laser or plasma cannon fights the boss just as it does the waves). If the
+ * player somehow has none of a kind, fall back to the canned roster so the fight
+ * is still playable.
  */
 export function bossConfigFromLayout(placed: PlacedDevice[], bossIndex: 1 | 2): BossConfig {
   const base = bossIndex === 1 ? BOSS_1 : BOSS_2;
 
-  // The boss assignment minigame is the tier-1 teaching tool, so it only
-  // fields the gear it understands; fancy tier-2/3 weapons sit the boss out.
   const sensors: DeviceUnit[] = placed
-    .filter((p) => p.kind === "sensor" && BOSS_KNOWN.has(p.placeableId))
-    .slice(0, 6)
-    .map((p, i) => ({ id: `s-${i}`, typeId: p.placeableId as SensorTypeId, bearing: bearingOfHex(p) }));
-
+    .filter((p) => p.kind === "sensor")
+    .map((p, i) => unitFromPlaced(p, `s-${i}`));
   const effectors: DeviceUnit[] = placed
-    .filter((p) => p.kind === "effector" && BOSS_KNOWN.has(p.placeableId))
-    .slice(0, 6)
-    .map((p, i) => ({ id: `e-${i}`, typeId: p.placeableId as EffectorTypeId, bearing: bearingOfHex(p) }));
+    .filter((p) => p.kind === "effector")
+    .map((p, i) => unitFromPlaced(p, `e-${i}`));
 
   return {
     ...base,

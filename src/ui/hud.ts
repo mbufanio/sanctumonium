@@ -44,9 +44,16 @@ export class Hud {
     this.refs = {};
   }
 
-  /** Create the persistent status bar (idempotent). */
+  /** Create the persistent status bar (idempotent + self-healing).
+   *
+   * Other overlays (boss console, screens) historically cleared the SHARED
+   * overlay root, detaching this bar while we still held a reference — so the
+   * money/wave readout silently vanished after the first boss/wave. Guard on
+   * isConnected so a detached bar is rebuilt rather than assumed present. */
   private ensureBar(): void {
-    if (this.bar) return;
+    if (this.bar && this.bar.isConnected) return;
+    this.bar = null;
+    this.refs = {};
     const bar = el("div", "hud-bar");
     bar.innerHTML = `
       <div class="hud-stat"><span class="hud-k">STAGE</span><span class="hud-v" data-ref="stage">—</span></div>
