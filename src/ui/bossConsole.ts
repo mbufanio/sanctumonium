@@ -30,6 +30,7 @@ export interface BossConsoleCallbacks {
 const NS = "http://www.w3.org/2000/svg";
 
 export class BossConsole {
+  private root: HTMLElement;
   private host: HTMLElement;
   private cb: BossConsoleCallbacks;
   /** Which boss has already played its threats-fly-in animation. */
@@ -39,13 +40,20 @@ export class BossConsole {
     // Own a dedicated container so clearing the console never wipes sibling
     // overlays (the HUD bar lives in the same root). display:contents keeps it
     // layout-neutral when empty so it can't intercept field taps.
+    this.root = root;
     this.host = document.createElement("div");
     this.host.className = "boss-host";
     root.append(this.host);
     this.cb = cb;
   }
 
+  /** Re-attach the host if a sibling overlay wiped the shared root (innerHTML). */
+  private ensureHost(): void {
+    if (!this.host.isConnected) this.root.append(this.host);
+  }
+
   clear(): void {
+    this.ensureHost();
     this.host.innerHTML = "";
     this.animatedBoss = null; // next boss shown should fly its threats in again
   }
@@ -56,6 +64,7 @@ export class BossConsole {
     const animateIn = !s.result && this.animatedBoss !== s.cfg.id;
     if (!s.result) this.animatedBoss = s.cfg.id;
 
+    this.ensureHost();
     this.host.innerHTML = "";
     const panel = el("div", "boss");
     panel.append(this.header(s));
