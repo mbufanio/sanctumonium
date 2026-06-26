@@ -358,9 +358,20 @@ export class WorldRenderer {
         this.dronesGfx.moveTo(tr[i - 1].x, tr[i - 1].y).lineTo(tr[i].x, tr[i].y).stroke({ color: COLORS.threat, width: sz * 0.45 * k, alpha: 0.28 * k });
       }
 
-      // Tracked drones get a cyan lock ring (brain accent reserved for boss;
-      // here a neutral track ring in coverage teal).
-      if (d.tracked) this.dronesGfx.circle(s.x, s.y, sz + 3).stroke({ color: COLORS.coverage, width: 1, alpha: 0.7 });
+      // Kill-chain readout on each threat: undetected = bare triangle; DETECTED
+      // (a return, not yet classified) = amber arc that fills with classification
+      // confidence; TRACKED (fire-control) = a closed cyan lock ring. You can
+      // literally watch the chain run — fast when coordinated, ragged without.
+      if (d.tracked) {
+        this.dronesGfx.circle(s.x, s.y, sz + 3).stroke({ color: COLORS.coverage, width: 1.3, alpha: 0.8 });
+        // little lock ticks
+        for (const a of [0.6, 2.7, 4.3]) {
+          this.dronesGfx.moveTo(s.x + Math.cos(a) * (sz + 1), s.y + Math.sin(a) * (sz + 1)).lineTo(s.x + Math.cos(a) * (sz + 4.5), s.y + Math.sin(a) * (sz + 4.5)).stroke({ color: COLORS.coverage, width: 1, alpha: 0.8 });
+        }
+      } else if (d.detected) {
+        const end = -Math.PI / 2 + Math.max(0.08, d.idConf) * Math.PI * 2;
+        this.dronesGfx.arc(s.x, s.y, sz + 3, -Math.PI / 2, end).stroke({ color: COLORS.seam, width: 1.2, alpha: 0.85 });
+      }
       this.triangle(this.dronesGfx, s.x, s.y, sz, COLORS.threatDeep, COLORS.threat);
     }
     // Drop trails/seen-marks for drones that left the field (killed or leaked).

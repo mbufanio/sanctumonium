@@ -109,6 +109,40 @@ describe("area effectors (spec §7 — tier-2/3 spectacle)", () => {
   });
 });
 
+describe("kill chain (detect → classify → track)", () => {
+  // Two radars both covering the same northern approach (one centred, one pushed
+  // north). Fused (coordinated) reads build classification confidence faster
+  // than leaning on the single best sensor.
+  const placed = [device("sensor", "radar", 0, 0), device("sensor", "radar", 0, -1)];
+  const wave = singleSpawnWave("rf-quad");
+
+  function idConfAfter(coordinated: boolean, steps: number): number {
+    const rt = createRealtimeState();
+    const rng = new Rng(1);
+    // Spawn inside both radars' range so classification starts immediately.
+    for (let i = 0; i < steps; i++) stepWave(rt, placed, wave, 1 / 60, rng, { spawnRadius: 150, coordinated });
+    return rt.drones[0]?.idConf ?? 1;
+  }
+
+  it("coordination fuses sensors into a track faster than going solo", () => {
+    expect(idConfAfter(true, 3)).toBeGreaterThan(idConfAfter(false, 3));
+  });
+
+  it("with no capable sensor, a drone is never classified (no fire-control track)", () => {
+    // An RF-DF cannot classify a non-emitting autonomy drone — it stays a blip.
+    const rfdfOnly = [device("sensor", "rf-df", 0, 0)];
+    const rt = createRealtimeState();
+    const rng = new Rng(1);
+    let everTracked = false;
+    for (let i = 0; i < 600; i++) {
+      stepWave(rt, rfdfOnly, singleSpawnWave("autonomy"), 1 / 60, rng, { spawnRadius: 180 });
+      if (rt.drones[0]?.tracked) everTracked = true;
+      if (!rt.drones.length) break;
+    }
+    expect(everTracked).toBe(false);
+  });
+});
+
 describe("brain coordination (spec §12 face 1 — same hardware, better used)", () => {
   // Four overlapping net-drones around the centre, all tracked by a central
   // radar, against a dense wave. Without coordination they dogpile the most

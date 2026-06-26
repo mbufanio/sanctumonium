@@ -44,8 +44,16 @@ export interface Drone {
   bounty: number;
   leakDamage: number;
   state: DroneState;
-  /** True while at least one capable, in-range sensor is tracking it. */
+  // ---- kill chain (spec: detect → classify/ID → track → engage) ----------
+  /** A sensor has a return on it (a blip), even if it can't classify it. */
+  detected: boolean;
+  /** Classification confidence [0..1]; rises while a CAPABLE sensor covers it. */
+  idConf: number;
+  /** Fire-control track: detected AND classified past threshold. The thing an
+   *  effector needs for a clean shot. */
   tracked: boolean;
+  /** Stable per-drone track number for the telemetry readout (e.g. 0147). */
+  trackId: number;
   /** Visual scale (1 = normal; smaller for swarm drones). */
   size: number;
 }
