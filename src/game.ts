@@ -31,6 +31,7 @@ import { WorldRenderer } from "./render/world.ts";
 import { BossConsole } from "./ui/bossConsole.ts";
 import { Screens } from "./ui/screens.ts";
 import { Hud } from "./ui/hud.ts";
+import { Operator } from "./ui/operator.ts";
 import { LeaderboardUI } from "./ui/leaderboard.ts";
 import type { RunStats } from "./leaderboard/rules.ts";
 
@@ -43,7 +44,10 @@ export class Game {
   private console: BossConsole;
   private screens: Screens;
   private hud: Hud;
+  private operator = new Operator();
   private leaderboard: LeaderboardUI;
+  /** Scripted Act-1 operator lines fire once per run (guard against replays). */
+  private said = new Set<string>();
   private rng: Rng;
   private accumulator = 0;
   private currentBossIndex: 1 | 2 | null = null;
@@ -178,6 +182,7 @@ export class Game {
     this.state.rt = null;
     this.console.clear();
     this.hud.clear();
+    this.operator.reset();
     this.leaderboard.clear();
     this.screens.title();
   }
@@ -200,9 +205,21 @@ export class Game {
     this.state.brainStaffDisabled = staffDisabled;
     this.terrain = buildTerrain(level.terrain);
     this.currentBossIndex = null;
+    this.said.clear();
     this.world.drawStatic(this.state);
     this.screens.clear();
+    // VEGA comes on station: site + stakes (ACT1 spec §2).
+    this.operator.reset();
+    this.operator.setSitrep(level.name, "grid online");
+    this.operator.say(level.stakes);
     this.enterBuild();
+  }
+
+  /** Fire a scripted operator line at most once per run. */
+  private sayOnce(key: string, text: string, opts: { ms?: number; accent?: boolean } = {}): void {
+    if (this.said.has(key)) return;
+    this.said.add(key);
+    this.operator.say(text, opts);
   }
 
   /** Between-waves build phase (spec §13: between-waves only). */
@@ -219,6 +236,7 @@ export class Game {
     // arcade is reflex, not planning.)
     if (s.act === "arcade") {
       this.recDismissed = true;
+      this.operator.setSitrep(s.level.name, "arsenal hot · deploy");
       this.refreshBuildDock();
       return;
     }
@@ -227,6 +245,7 @@ export class Game {
       return;
     }
     this.recDismissed = false;
+    this.operator.setSitrep(s.level.name, s.brainUnlocked ? "coordination active · build" : "grid hot · build");
     this.refreshBuildDock();
   }
 
@@ -274,6 +293,15 @@ export class Game {
       this.world.setGhost(null);
       // Ops act builds between waves only — the dock closes for the fight.
       this.hud.hideBuild();
+      this.operator.setSitrep(s.level.name, "threat inbound");
+      // Beat 3 — name the raggedness on the very first wave (plants the problem
+      // the unlock will answer). Post-unlock, name the lived difference once.
+      if (!s.brainUnlocked) {
+        this.sayOnce("ragged", "Units are doing their best, but they're not talking to each other. It's messy.");
+      } else {
+        this.sayOnce("fused", "Tracks are fused — every shooter's working off one picture now.", { accent: true });
+        this.sayOnce("samegear", "Same units. Now they're one system. Feel the difference.");
+      }
     } else {
       this.startBoss(entry.bossIndex);
     }
@@ -356,6 +384,7 @@ export class Game {
     s.phase = "boss";
     s.boss = session;
     this.hud.clear();
+    this.operator.setSitrep(s.level.name, bossIndex === 1 ? "coordinated strike — manual" : "coordinated strike — brain online");
     this.console.render(session);
   }
 
@@ -368,6 +397,9 @@ export class Game {
       s.score += session.result.stopped * 120;
     }
     s.bossesBeaten++;
+    // Full-screen narrative beats carry their own copy — quiet the operator HUD.
+    this.operator.clearLines();
+    this.operator.hideSitrep();
     if (this.currentBossIndex === 1) {
       s.log.boss1 = session.result ?? undefined;
       s.phase = "unlock";
@@ -413,6 +445,7 @@ export class Game {
     }
     this.console.clear();
     this.hud.clear();
+    this.operator.reset();
     this.world.setGhost(null);
     // Arcade ends only by being overwhelmed — show the "you survived to Wave N"
     // beat first, then the score submission.
@@ -709,6 +742,7 @@ export class Game {
     if (this.attract) return;
     this.attract = true;
     this.attractLevelCursor = 0;
+    this.operator.setMuted(true); // the bot doesn't need a voice
     this.startAttractDemo();
     this.attractTimer = window.setInterval(() => this.attractTick(), Game.ATTRACT_STEP_MS);
   }
@@ -716,6 +750,7 @@ export class Game {
   private exitAttract(): void {
     if (!this.attract) return;
     this.attract = false;
+    this.operator.setMuted(false);
     if (this.attractTimer !== null) {
       window.clearInterval(this.attractTimer);
       this.attractTimer = null;
@@ -883,6 +918,7 @@ export class Game {
     this.hideAttractOverlay();
     this.staffPanel?.remove();
     this.staffPanel = null;
+    this.operator.setMuted(false);
     this.state.rt = null;
     this.world.setGhost(null);
     this.goTitle();

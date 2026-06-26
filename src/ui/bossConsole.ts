@@ -80,11 +80,20 @@ export class BossConsole {
 
   private header(s: BossSession): HTMLElement {
     const h = el("div", "boss-header");
+    const titleWrap = el("div", "boss-title-wrap");
     const title = el("div", "boss-title");
     title.textContent = s.cfg.title;
+    // VEGA subtext frames the fight (ACT1 spec §4, Beats 4 & 7).
+    const sub = el("div", "boss-vega");
+    sub.innerHTML = s.result
+      ? ""
+      : s.brain
+        ? "◈ VEGA: Now you can see the odds. Take the shots that count."
+        : "◈ VEGA: No fused picture. You're calling every shot blind. Do your best.";
+    titleWrap.append(title, sub);
     const mode = el("div", "boss-mode " + (s.brain ? "on" : "off"));
     mode.textContent = s.brain ? "◈ COORDINATION ONLINE" : "⚠ NO COORDINATION — MANUAL";
-    h.append(title, mode);
+    h.append(titleWrap, mode);
     return h;
   }
 
@@ -373,6 +382,16 @@ export class BossConsole {
     const sub = el("div", "result-sub");
     sub.textContent = s.brain ? "Every shot pre-checked." : "Odds hidden. Outcome left to chance.";
     wrap.append(sub);
+
+    // VEGA verdict — frame Boss #1 as luck (setup) and Boss #2 as the brain's
+    // doing (closes the attribution gap). ACT1 spec §4, Beats 4 & 7.
+    const vega = el("div", "result-vega");
+    vega.innerHTML = `◈ VEGA: ${
+      s.brain
+        ? "Same threats as before. This time the system showed you the play. That's the difference."
+        : "We held. Barely. There has to be a better way to run this."
+    }`;
+    wrap.append(vega);
 
     const cont = el("button", "btn-continue");
     cont.textContent = s.brain ? "Continue" : "Continue";

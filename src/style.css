@@ -208,6 +208,63 @@ body {
 .fc-b { font-size: 0.92rem; color: var(--text); line-height: 1.4; }
 @media (max-width: 760px) { .future-grid { grid-template-columns: 1fr; } }
 
+/* ---- Act 1 narrative copy (ACT1 spec) ---------------------------------- */
+
+.site-stakes { margin-top: 0.5rem; font-size: 0.82rem; color: var(--brain); font-family: var(--font); opacity: 0.92; }
+.north-star {
+  max-width: 46rem; margin: 1.4rem auto 0.6rem;
+  font-size: clamp(1rem, 1.8vw, 1.3rem); font-weight: 700; line-height: 1.4;
+  color: var(--brain); text-shadow: 0 0 18px rgba(0, 229, 255, 0.35);
+}
+.north-star .ns-tag { color: var(--brain-gold); }
+.unlock-ns { opacity: 0; animation: rise 0.8s ease forwards; animation-delay: 3.6s; }
+
+.boss-title-wrap { display: flex; flex-direction: column; gap: 0.25rem; }
+.boss-vega { font-size: 0.85rem; color: var(--brain); opacity: 0.9; }
+.boss-vega:empty { display: none; }
+.result-vega {
+  margin-top: 0.6rem; padding: 0.6rem 0.8rem; border-left: 2px solid var(--brain);
+  background: rgba(0, 229, 255, 0.06); border-radius: 0 8px 8px 0;
+  font-size: 0.92rem; line-height: 1.35; color: var(--text);
+}
+
+/* ---- operator (VEGA) — the Act 1 voice (ACT1 spec §2) ------------------ */
+
+.op-sigil {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.25rem; height: 1.25rem; border-radius: 6px;
+  background: rgba(0, 229, 255, 0.14); color: var(--brain);
+  border: 1px solid rgba(0, 229, 255, 0.5); font-size: 0.8rem; flex: 0 0 auto;
+}
+.op-cs { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.18em; color: var(--brain); }
+
+/* Persistent sit-rep slot — just under the HUD bar, top-left. */
+#op-sitrep {
+  position: fixed; left: 1.2rem; top: 3.4rem; z-index: 12;
+  display: flex; align-items: center; gap: 0.5rem;
+  pointer-events: none; max-width: 60vw;
+}
+#op-sitrep .op-sr-site { font-family: var(--mono); font-size: 0.78rem; color: var(--text); font-weight: 700; }
+#op-sitrep .op-sr-status { font-size: 0.8rem; color: var(--text-dim); }
+#op-sitrep .op-sr-status::before { content: "· "; color: var(--panel-edge); }
+
+/* Timed line panel — bottom-left, above the dock's left edge, non-blocking. */
+#op-line {
+  position: fixed; left: 1.2rem; bottom: 8.4rem; z-index: 28;
+  display: flex; align-items: flex-start; gap: 0.6rem;
+  max-width: min(36rem, 64vw);
+  padding: 0.7rem 0.9rem; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(10, 20, 30, 0.94), rgba(8, 16, 24, 0.9));
+  border: 1px solid var(--panel-edge); border-left: 2px solid var(--brain);
+  pointer-events: none; opacity: 0; transform: translateY(8px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+#op-line.show { opacity: 1; transform: translateY(0); }
+#op-line.accent { border-left-color: var(--brain-gold); box-shadow: 0 0 24px rgba(0, 229, 255, 0.18); }
+#op-line .op-text { font-size: 0.94rem; line-height: 1.35; color: var(--text); }
+#op-line .op-cs { padding-top: 0.15rem; }
+@media (max-width: 760px) { #op-line { bottom: 7rem; max-width: 84vw; } }
+
 /* ---- arcade survival --------------------------------------------------- */
 
 /* The HUD shifts to a hot ARCADE treatment once the act break is crossed. */

@@ -4,6 +4,7 @@
  * deliberately spare and large-type for a busy show floor (spec §3).
  */
 import type { LevelDef } from "../sim/level.ts";
+import { NORTH_STAR } from "./operator.ts";
 
 export interface ScreenCallbacks {
   onStart(): void;
@@ -32,10 +33,11 @@ export class Screens {
     s.innerHTML = `
       <div class="screen-kicker">COUNTER-UAS · LIVE DEFENSE</div>
       <h1 class="screen-h1">Hostile drones inbound.</h1>
-      <h2 class="screen-h2">Match the right sensor and effector to each threat.</h2>
+      <h2 class="screen-h2">You'll have the gear. We'll see if that's enough.</h2>
       <p class="screen-body">
-        A coordinated strike is closing on the site. Track each drone and pick
-        the effector that beats it — before it reaches the asset.
+        A coordinated strike is closing on the site. You have sensors and
+        shooters. Whether that's a <em>defense</em> is the question we're here to
+        answer.
       </p>
     `;
     const btn = button("Begin", "screen-cta");
@@ -61,6 +63,7 @@ export class Screens {
         <div class="site-name">${lvl.name}</div>
         <div class="site-blurb">${lvl.blurb}</div>
         <div class="site-wrinkle"><span class="wrinkle-tag">WRINKLE</span> ${lvl.wrinkle}</div>
+        <div class="site-stakes">◈ VEGA: ${lvl.stakes}</div>
       `;
       card.onclick = () => onPick(lvl);
       grid.append(card);
@@ -74,15 +77,15 @@ export class Screens {
     this.clear();
     const s = screen("unlock-screen");
     s.innerHTML = `
-      <div class="op-line op-1">"We held. Barely."</div>
-      <div class="op-line op-2">"Patch the units into the coordination layer —
-        let them share tracks and call their shots together."</div>
+      <div class="op-line op-1">"We held. Barely. The gear's fine — the problem is it's fighting as separate pieces."</div>
+      <div class="op-line op-2">"Patch every unit into the coordination layer. One fused picture. Shots called together."</div>
       <div class="op-line op-3">"Coordination online. Re-engage."</div>
       <div class="brain-boot">
         <div class="boot-ring"></div>
         <div class="boot-label">◈ COORDINATION ONLINE</div>
         <div class="boot-sub">Shared tracks · deconflicted fire · live hit odds</div>
       </div>
+      <div class="north-star unlock-ns">${NORTH_STAR} <span class="ns-tag">Let's prove it.</span></div>
     `;
     const btn = button("Re-engage", "screen-cta accent-cta");
     btn.onclick = () => this.cb.onUnlockContinue();
@@ -102,6 +105,7 @@ export class Screens {
       <div class="screen-kicker accent-kicker">◈ COORDINATION PROVEN</div>
       <h1 class="screen-h1">Future Systems Online.</h1>
       <h2 class="screen-h2">The coordination layer is cleared to drive the next-gen arsenal.</h2>
+      <div class="north-star actbreak-ns">${NORTH_STAR}</div>
       <div class="future-grid">
         <div class="future-card"><div class="fc-h">DIRECTED-ENERGY &amp; PLASMA</div><div class="fc-b">High-end effectors come online — area weapons that clear whole clusters.</div></div>
         <div class="future-card"><div class="fc-h">FIELD ON THE FLY</div><div class="fc-b">No more waiting between waves — deploy reinforcements live as the fight unfolds.</div></div>

@@ -28,6 +28,9 @@ export interface LevelDef {
   blurb: string;
   /** The teaching wrinkle, shown to the player (spec §9). */
   wrinkle: string;
+  /** One line of operational stakes in the operator's voice (ACT1 spec §2) —
+   *  why this asset matters, so a leak feels like a loss, not a number. */
+  stakes: string;
   /** Number of hex rings from the centre to the field edge. */
   rings: number;
   asset: AssetDef;
@@ -54,6 +57,7 @@ const MILITARY: LevelDef = {
   name: "Forward Operating Base",
   blurb: "Clear perimeter, obvious approach corridors. The clean teacher.",
   wrinkle: "Balanced threats — learn the matchups and that geometry beats spend.",
+  stakes: "Command post for the whole sector. It goes dark, the sector goes blind.",
   rings: 9,
   asset: { id: "command", name: "Command Post", pos: { q: 0, r: 0 }, radius: 1 },
   startBudget: 120,
@@ -87,6 +91,7 @@ const AIRPORT: LevelDef = {
   name: "International Airport",
   blurb: "Live airfield. A single intrusion shuts down operations — leaks cost you.",
   wrinkle: "Every leak also tanks your score — operations can't tolerate intrusions.",
+  stakes: "Forty thousand people moving through this airspace. Nothing gets near the runways.",
   rings: 10,
   asset: { id: "tower", name: "Control Tower", pos: { q: 0, r: 0 }, radius: 1 },
   startBudget: 140,
@@ -118,6 +123,7 @@ const ENERGY: LevelDef = {
   name: "Power Substation",
   blurb: "A fragile high-value asset. Autonomy & fiber-controlled drones shrug off jammers.",
   wrinkle: "Jammer-immune drones dominate — you can't jam your way out; track and kill.",
+  stakes: "That substation feeds three counties. We do not let anything through.",
   rings: 8,
   asset: { id: "core", name: "Transformer Yard", pos: { q: 0, r: 0 }, radius: 1 },
   startBudget: 150,
@@ -149,6 +155,7 @@ const STADIUM: LevelDef = {
   name: "Stadium · Event Day",
   blurb: "Packed venue. Cheap drone swarms flood the airspace — area weapons shine.",
   wrinkle: "Swarms: dozens of fast, cheap drones at once. Single-shot can't keep up.",
+  stakes: "Sixty thousand in the stands. A swarm over that crowd is not an option.",
   rings: 10,
   asset: { id: "field", name: "Center Field", pos: { q: 0, r: 0 }, radius: 1 },
   startBudget: 160,
