@@ -527,7 +527,9 @@ body {
 .integ-fill.ok { background: linear-gradient(90deg, #2dd4bf, #4ade80); }
 .integ-fill.warn { background: linear-gradient(90deg, #ffb020, #ffd166); }
 .integ-fill.crit { background: linear-gradient(90deg, #ff5470, #ff8a5b); }
-.integ-num { position: absolute; right: 8px; top: 0; line-height: 18px; font-family: var(--mono); font-size: 0.74rem; font-weight: 700; color: #04131c; }
+/* Light text + shadow so the number stays legible whether it sits over the
+   coloured fill or the dark empty track once integrity drops. */
+.integ-num { position: absolute; right: 8px; top: 0; line-height: 18px; font-family: var(--mono); font-size: 0.74rem; font-weight: 800; color: #eef6ff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75); }
 
 .build-dock {
   pointer-events: none;

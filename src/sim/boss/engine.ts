@@ -26,12 +26,18 @@ const UNTRACKED_PENALTY = 0.35;
 
 const EMPTY_MATRIX: Record<string, number> = {};
 
-/** Range factor: full effect inside range, graceful falloff just beyond it. */
+/**
+ * Range factor for the boss. Threats fly INWARD to the asset, so any device in
+ * their path eventually gets a shot — range is an advantage (it covers more of
+ * the approach), never a hard gate. A device whose reach ≥ the threat's distance
+ * is fully effective; a shorter-ranged one still engages as the drone closes,
+ * down to a floor. This is what makes every placed device usable at the boss
+ * (a short-range net is no longer "useless" against a far drone it would happily
+ * kill in the real-time wave).
+ */
 function rangeFactor(range: number, distance: number): number {
-  if (distance <= range) return 1;
-  // Falls off over a 1km grace band, then zero.
-  const over = distance - range;
-  return Math.max(0, 1 - over / 1.0);
+  const cover = Math.min(1, range / Math.max(0.1, distance));
+  return 0.5 + 0.5 * cover;
 }
 
 /**

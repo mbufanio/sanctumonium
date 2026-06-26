@@ -98,26 +98,45 @@ export class BossConsole {
     const cx = 50;
     const cy = 50;
     const maxDist = Math.max(...s.cfg.threats.map((t) => t.distance), 1);
-    const maxDevDist = Math.max(...[...s.cfg.sensors, ...s.cfg.effectors].map((d) => d.distance ?? 2), 1);
+    const sensors = s.cfg.sensors;
+    const maxDevDist = Math.max(...[...sensors, ...s.cfg.effectors].map((d) => d.distance ?? 2), 1);
 
-    // Range rings.
-    for (const rr of [16, 26, 36, 44]) {
+    // The player's RADAR perimeter — the defended ring the sensors throw up. The
+    // more sensors fielded, the further it pushes out, and the boss drones spawn
+    // BEYOND it (they can't appear inside your radar net). Capped so threats
+    // always have an outer band to fly in from.
+    const perimeterR = Math.min(34, 22 + sensors.length * 2.5);
+
+    // Faint inner range rings.
+    for (const rr of [12, 20, 28]) {
       const c = document.createElementNS(NS, "circle");
       c.setAttribute("cx", String(cx));
       c.setAttribute("cy", String(cy));
       c.setAttribute("r", String(rr));
       c.setAttribute("fill", "none");
-      c.setAttribute("stroke", rgba(COLORS.coverage, 0.12));
+      c.setAttribute("stroke", rgba(COLORS.coverage, 0.1));
       c.setAttribute("stroke-width", "0.4");
       svg.append(c);
     }
+    // The radar perimeter ring (dashed), so threats visibly start outside it.
+    const perim = document.createElementNS(NS, "circle");
+    perim.setAttribute("cx", String(cx));
+    perim.setAttribute("cy", String(cy));
+    perim.setAttribute("r", String(perimeterR));
+    perim.setAttribute("fill", rgba(COLORS.coverage, 0.04));
+    perim.setAttribute("stroke", rgba(COLORS.coverage, 0.35));
+    perim.setAttribute("stroke-width", "0.45");
+    perim.setAttribute("stroke-dasharray", "1.6 1.4");
+    svg.append(perim);
+    this.label(svg, cx, cy - perimeterR - 1.8, "RADAR PERIMETER", COLORS.coverage, 1.9);
 
-    // Position helpers. Threats sit on the outer band by distance; devices on
-    // an inner band, spread by their real distance from the asset so a big
-    // roster doesn't collapse onto one ring.
-    const threatPos = (t: ThreatUnit) => polar(cx, cy, 18 + (t.distance / maxDist) * 26, t.bearing);
+    // Position helpers. Threats sit in the OUTER band (beyond the radar
+    // perimeter) so none appear central; devices on an inner band, spread by
+    // their real distance so a big roster doesn't collapse onto one ring.
+    const threatBand = Math.max(38, perimeterR + 5);
+    const threatPos = (t: ThreatUnit) => polar(cx, cy, threatBand + (t.distance / maxDist) * (46 - threatBand), t.bearing);
     const devPos = (d: DeviceUnit) => polar(cx, cy, 7.5 + ((d.distance ?? 2) / maxDevDist) * 7.5, d.bearing);
-    const rimPos = (t: ThreatUnit) => polar(cx, cy, 47, t.bearing);
+    const rimPos = (t: ThreatUnit) => polar(cx, cy, 49, t.bearing);
 
     // Assignment lines (drawn under the markers).
     for (const t of s.cfg.threats) {
