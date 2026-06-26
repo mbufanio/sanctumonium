@@ -244,6 +244,8 @@ body {
 
 .boss {
   pointer-events: auto;
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: grid;
@@ -251,6 +253,10 @@ body {
   grid-template-rows: auto 1fr;
   gap: 0.5rem 1rem;
   padding: 1rem 1.4rem 1.2rem;
+  /* Opaque backdrop — the boss console is a full takeover; without this the
+     live Pixi field (its own asset cube + device markers) bleeds through and
+     reads as a confusing second set of devices. */
+  background: radial-gradient(120% 100% at 38% 48%, #0c1a28 0%, #07111b 60%, #050b12 100%);
 }
 
 .boss-header {
