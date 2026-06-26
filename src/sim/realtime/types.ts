@@ -22,6 +22,14 @@ export interface PlacedDevice {
   radius: number;
   /** Effectors: seconds between shots. */
   fireInterval: number;
+  /** Effectors: magazine depth (shots before reload); 0 = unlimited. */
+  magazine: number;
+  /** Effectors: seconds to reload an empty magazine. */
+  reloadTime: number;
+  /** Effectors: shots left in the current magazine. */
+  ammo: number;
+  /** Effectors: seconds remaining in a reload (0 = ready / not reloading). */
+  reloadCd: number;
   /** Effectors: area-of-effect radius in plane units (0 = single target). */
   aoe: number;
   /** Effectors: effectiveness per threat type. */

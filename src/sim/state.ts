@@ -121,6 +121,10 @@ export function makePlaced(placeableId: string, hex: Hex): PlacedDevice {
     level: 0,
     radius: s.radius,
     fireInterval: s.fireInterval,
+    magazine: s.magazine,
+    reloadTime: s.reloadTime,
+    ammo: s.magazine,
+    reloadCd: 0,
     aoe: s.aoe,
     effect: s.effect,
     track: s.track,
@@ -136,6 +140,9 @@ export function upgradeDevice(dev: PlacedDevice): void {
   const s = deviceStats(p, dev.level);
   dev.radius = s.radius;
   dev.fireInterval = s.fireInterval;
+  dev.magazine = s.magazine;
+  dev.reloadTime = s.reloadTime;
+  dev.ammo = Math.min(dev.ammo, s.magazine || dev.ammo);
   dev.aoe = s.aoe;
   dev.effect = s.effect;
   dev.track = s.track;

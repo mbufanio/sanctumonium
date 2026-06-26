@@ -324,7 +324,7 @@ export class Game {
       s.rt = createRealtimeState();
       // Adaptive enemy: bias this wave's spawns toward the layout's seams.
       s.activeWave = adaptWave(entry.wave, s.placed, this.world.spawnRadius(s), this.rng, this.terrain);
-      for (const d of s.placed) d.cooldown = 0;
+      for (const d of s.placed) { d.cooldown = 0; d.ammo = d.magazine; d.reloadCd = 0; }
       s.selectedDeviceId = null;
       s.selectedPlaceable = null;
       this.world.setGhost(null);
@@ -366,7 +366,7 @@ export class Game {
     s.arcadeWave = 1;
     s.rt = createRealtimeState();
     s.activeWave = adaptWave(makeArcadeWave(1), s.placed, this.world.spawnRadius(s), this.rng, this.terrain);
-    for (const d of s.placed) d.cooldown = 0;
+    for (const d of s.placed) { d.cooldown = 0; d.ammo = d.magazine; d.reloadCd = 0; }
     s.selectedDeviceId = null;
     this.world.setGhost(null);
     this.refreshBuildDock(); // mid-wave reinforce dock

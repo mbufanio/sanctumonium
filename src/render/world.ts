@@ -288,7 +288,15 @@ export class WorldRenderer {
       if (d.kind === "sensor") {
         this.assetGfx.circle(s.x, s.y, 7).fill({ color: COLORS.panel }).stroke({ color: COLORS.coverage, width: 2 });
       } else {
-        this.assetGfx.rect(s.x - 7, s.y - 7, 14, 14).fill({ color: COLORS.panel }).stroke({ color: COLORS.friendly, width: 2 });
+        // Reloading effectors dim and show a sweeping reload arc — you can SEE
+        // the magazine gap (and, coordinated, how they're staggered).
+        const reloading = d.magazine > 0 && d.reloadCd > 0;
+        const edge = reloading ? COLORS.seam : COLORS.friendly;
+        this.assetGfx.rect(s.x - 7, s.y - 7, 14, 14).fill({ color: COLORS.panel, alpha: reloading ? 0.55 : 1 }).stroke({ color: edge, width: 2 });
+        if (reloading) {
+          const prog = 1 - d.reloadCd / Math.max(0.001, d.reloadTime);
+          this.assetGfx.arc(s.x, s.y, 11, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2).stroke({ color: COLORS.seam, width: 1.6, alpha: 0.9 });
+        }
       }
     }
   }

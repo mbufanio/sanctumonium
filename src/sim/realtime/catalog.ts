@@ -57,6 +57,10 @@ export interface Placeable {
   radius: number;
   /** Effectors: seconds between shots (0 for sensors). */
   cooldown: number;
+  /** Effectors: shots before a reload is required (magazine depth). */
+  magazine?: number;
+  /** Effectors: seconds to reload an empty magazine. */
+  reloadTime?: number;
   /** Effectors: area-of-effect radius in plane units (0 = single target). */
   aoe: number;
   /** Effectors: base single-shot effectiveness per threat type when tracked. */
@@ -119,6 +123,8 @@ const NET_DRONE: Placeable = {
   cost: 80,
   radius: km(2.2),
   cooldown: 1.6,
+  magazine: 6,
+  reloadTime: 2.4,
   aoe: 0,
   effect: { ...EFFECTOR_TYPES["net-drone"].effect },
   upgrades: [
@@ -137,6 +143,8 @@ const RF_JAMMER: Placeable = {
   cost: 90,
   radius: km(3.5),
   cooldown: 1.1,
+  magazine: 10,
+  reloadTime: 1.8,
   aoe: 0,
   effect: { ...EFFECTOR_TYPES["rf-jammer"].effect },
   upgrades: [
@@ -175,6 +183,8 @@ const HPM: Placeable = {
   cost: 170,
   radius: km(3.0),
   cooldown: 2.2,
+  magazine: 3,
+  reloadTime: 3.0,
   aoe: km(1.4),
   // Electronics-frying: works on autonomy drones too (unlike a jammer).
   effect: { "rf-quad": 0.8, autonomy: 0.78, "low-observable": 0.78 },
@@ -194,6 +204,8 @@ const LASER: Placeable = {
   cost: 190,
   radius: km(4.6),
   cooldown: 0.7,
+  magazine: 14,
+  reloadTime: 1.3,
   aoe: 0,
   effect: { "rf-quad": 0.95, autonomy: 0.95, "low-observable": 0.95 },
   upgrades: [
@@ -214,6 +226,8 @@ const PLASMA: Placeable = {
   cost: 340,
   radius: km(4.2),
   cooldown: 2.6,
+  magazine: 2,
+  reloadTime: 2.6,
   aoe: km(2.4),
   effect: { "rf-quad": 0.92, autonomy: 0.92, "low-observable": 0.9 },
   upgrades: [
@@ -232,6 +246,8 @@ const BEAM: Placeable = {
   cost: 320,
   radius: km(5.2),
   cooldown: 0.5,
+  magazine: 24,
+  reloadTime: 0.9,
   aoe: km(0.9),
   effect: { "rf-quad": 0.88, autonomy: 0.88, "low-observable": 0.88 },
   upgrades: [
@@ -260,6 +276,10 @@ export interface DeviceStats {
   radius: number;
   fireInterval: number;
   aoe: number;
+  /** Magazine depth (shots before reload); 0 for sensors / unlimited weapons. */
+  magazine: number;
+  /** Seconds to reload an empty magazine. */
+  reloadTime: number;
   effect: Record<ThreatTypeId, number>;
   track: Record<ThreatTypeId, number>;
 }
@@ -269,12 +289,14 @@ export function deviceStats(p: Placeable, level: number): DeviceStats {
   let radius = p.radius;
   let fireInterval = p.cooldown;
   let aoe = p.aoe;
+  const magazine = p.magazine ?? 0;
+  let reloadTime = p.reloadTime ?? 0;
   const effect = { ...emptyMatrix(), ...(p.effect ?? {}) };
   const track = { ...emptyMatrix(), ...(p.track ?? {}) };
   for (let i = 0; i < level && i < p.upgrades.length; i++) {
     const u = p.upgrades[i];
     if (u.rangeMul) radius *= u.rangeMul;
-    if (u.cooldownMul) fireInterval *= u.cooldownMul;
+    if (u.cooldownMul) { fireInterval *= u.cooldownMul; reloadTime *= u.cooldownMul; }
     if (u.aoeAdd) aoe += u.aoeAdd;
     if (u.effectAdd) {
       // Only boost matchups that already work — never make a jammer hurt an
@@ -285,7 +307,7 @@ export function deviceStats(p: Placeable, level: number): DeviceStats {
       for (const k of THREAT_KEYS) if (u.trackAdd[k]) track[k] = Math.min(1, track[k] + u.trackAdd[k]!);
     }
   }
-  return { radius, fireInterval, aoe, effect, track };
+  return { radius, fireInterval, aoe, magazine, reloadTime, effect, track };
 }
 
 /** Cost to take a device from its current level to the next, or null if maxed. */

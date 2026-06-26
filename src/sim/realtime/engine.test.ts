@@ -143,6 +143,18 @@ describe("kill chain (detect → classify → track)", () => {
   });
 });
 
+describe("magazine / reload discipline", () => {
+  it("an effector reloads and keeps fighting beyond a single magazine", () => {
+    // A net holds 6 rounds. Against a steady stream of more than 6 drones it
+    // must reload and refill to keep killing — so kills exceed the magazine.
+    const placed = [device("sensor", "radar", 0, 0), device("effector", "net-drone", 0, 0)];
+    const spawns = Array.from({ length: 12 }, (_, i) => ({ at: i * 1.2, typeId: "rf-quad" as const, bearing: 0 }));
+    const wave: WaveDef = { index: 1, kind: "normal", label: "stream", spawns, stipend: 0 };
+    const { kills } = runToCompletion(placed, wave, 5);
+    expect(kills).toBeGreaterThan(6); // it reloaded at least once
+  });
+});
+
 describe("brain coordination (spec §12 face 1 — same hardware, better used)", () => {
   // Four overlapping net-drones around the centre, all tracked by a central
   // radar, against a dense wave. Without coordination they dogpile the most

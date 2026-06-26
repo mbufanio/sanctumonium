@@ -169,13 +169,37 @@ export function stepWave(
     return false;
   };
 
-  for (const e of effectors) {
+  // Magazine discipline (ACT1 value lever). Each weapon holds a magazine and
+  // must reload when dry. UNCOORDINATED, units fire whenever able and dogpile
+  // the same drones, so they empty and reload IN LOCKSTEP — a coverage gap the
+  // swarm pours through. COORDINATED, the grid works fullest-magazine-first and
+  // deconflicts, so weapons deplete at different rates and reloads STAGGER —
+  // there's always a shooter up. Same magazines, no dead air.
+  const order = env.coordinated
+    ? [...effectors].sort((a, b) => ammoFrac(b) - ammoFrac(a))
+    : effectors;
+  for (const e of order) {
+    // Reloading: tick it down, can't fire. When it completes, the magazine is
+    // refilled and the weapon is back in the fight.
+    if (e.magazine > 0 && e.reloadCd > 0) {
+      e.reloadCd = Math.max(0, e.reloadCd - dt);
+      if (e.reloadCd === 0) e.ammo = e.magazine;
+      continue;
+    }
     e.cooldown = Math.max(0, e.cooldown - dt);
     if (e.cooldown > 0) continue;
+    if (e.magazine > 0 && e.ammo <= 0) {
+      e.reloadCd = e.reloadTime; // dry — begin reload
+      continue;
+    }
     const target = pickTarget(rt.drones, e, claimed, terrain, !!env.coordinated);
     if (!target) continue;
     if (claimed) claimed.add(target.id);
     e.cooldown = e.fireInterval;
+    if (e.magazine > 0) {
+      e.ammo -= 1;
+      if (e.ammo <= 0) e.reloadCd = e.reloadTime; // spent the last round
+    }
     shotsFired++;
     // Uncoordinated, a unit can't classify before it shoots — so it fires even
     // at a drone its weapon can't beat (a jammer at an autonomy drone), burning
@@ -274,6 +298,11 @@ function trackingSensor(d: Drone, sensors: PlacedDevice[], terrain: TerrainMap):
 /** Single-shot hit probability from an effector's matchup value and track state. */
 export function hitChance(effectBase: number, tracked: boolean): number {
   return effectBase * (tracked ? 1 : UNTRACKED_PENALTY);
+}
+
+/** Fraction of magazine remaining (unlimited weapons read as full). */
+function ammoFrac(e: PlacedDevice): number {
+  return e.magazine > 0 ? e.ammo / e.magazine : 1;
 }
 
 function spawnDrone(rt: RealtimeState, s: SpawnEntry, spawnRadius: number): Drone {
