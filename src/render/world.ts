@@ -275,7 +275,7 @@ export class WorldRenderer {
     this.assetGfx.circle(ac.x, ac.y - 34, 7 + breath * 2.5).fill({ color: COLORS.assetCore, alpha: 0.18 });
     this.assetGfx.circle(ac.x, ac.y - 34, 4).fill(COLORS.assetCore);
 
-    // Device markers: sensors = teal rings, effectors = blue squares.
+    // Device markers: sensors = yellow rings, effectors = blue squares.
     const selPulse = 0.5 + 0.5 * Math.sin(state.time * 5);
     for (const d of state.placed) {
       const s = planeToPixel(d.pos);

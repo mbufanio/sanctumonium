@@ -1,10 +1,12 @@
 /**
  * Central color & signal language (spec §3).
  *
- * Consistency here is load-bearing: friendly = cool blues, threats = warm
- * reds, and the coordination brain gets ONE special accent (cyan/gold) used
- * nowhere else, so its arrival is visually unmistakable. Palette chosen to be
- * colorblind-safe-ish (blue vs orange separation reads on all common types).
+ * Consistency here is load-bearing: SENSORS = warm yellow (eyes), EFFECTORS =
+ * cool blue (shooters), so a glance separates "who sees" from "who shoots" — and
+ * where a sensor's yellow coverage overlaps an effector's blue, the translucent
+ * fills blend toward green (shared airspace, watched AND covered). Threats are
+ * warm reds; the coordination brain gets ONE special accent (cyan/gold) used
+ * nowhere else, so its arrival is visually unmistakable.
  */
 export const COLORS = {
   // World / ground
@@ -15,11 +17,12 @@ export const COLORS = {
   groundLine: 0x1d3346,
   groundLineWarm: 0x243a4d,
 
-  // Friendly devices & coverage (cool blues / teals)
+  // Effectors (shooters) = cool blue; sensors (eyes) = warm yellow. Overlapping
+  // translucent coverage blends toward green (the shared channel of both).
   friendly: 0x4fc3f7,
   friendlyDim: 0x2a6f8e,
-  coverage: 0x2dd4bf,
-  coverageFill: 0x134e4a,
+  coverage: 0xf5e14f,
+  coverageFill: 0x4a4413,
 
   // Protected asset
   asset: 0x9be7ff,

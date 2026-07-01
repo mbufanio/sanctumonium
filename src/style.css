@@ -13,7 +13,7 @@
   --text-dim: #8aa2b5;
   --friendly: #4fc3f7;
   --friendly-dim: #2a6f8e;
-  --coverage: #2dd4bf;
+  --coverage: #f5e14f;
   --asset: #9be7ff;
   --threat: #ff6b4a;
   --threat-track: #ffb199;
@@ -1075,5 +1075,5 @@ body.cb {
   --threat: #ff8c1a;
   --threat-track: #ffd28a;
   --friendly: #38b6ff;
-  --coverage: #19e3c0;
+  --coverage: #ffe94f;
 }
