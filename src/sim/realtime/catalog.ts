@@ -52,6 +52,9 @@ export interface Placeable {
   name: string;
   code: string;
   role: string;
+  /** Spec-card overview: how the real-world tech works and what its blind spot
+   *  is (tier 1-2), or the playful roadmap framing (tier 3). Company-agnostic. */
+  info: string;
   cost: number;
   /** Effective radius in plane units (km × RANGE_SCALE). */
   radius: number;
@@ -88,6 +91,7 @@ const RADAR: Placeable = {
   name: "Radar",
   code: "RADAR",
   role: "Detects & tracks drones by radar return.",
+  info: "Pulses radio energy and reads the returns. Small drones fly low and slow and reflect almost nothing, so a purpose-built C-UAS radar is tuned to pick them out of ground clutter. A low-observable airframe returns barely anything at all.",
   cost: 60,
   radius: km(4.0),
   cooldown: 0,
@@ -107,6 +111,7 @@ const RF_DF: Placeable = {
   name: "RF Direction-Finder",
   code: "RF-DF",
   role: "Locates drones by their radio emissions.",
+  info: "Fully passive — it listens for a drone's control and video links and triangulates the transmitter, emitting nothing itself. The blind spot: a drone flying a silent, pre-programmed route has no link to hear.",
   cost: 50,
   radius: km(3.2),
   cooldown: 0,
@@ -126,6 +131,7 @@ const NET_DRONE: Placeable = {
   name: "Net-Drone",
   code: "NET",
   role: "Captures a drone with a launched net.",
+  info: "An interceptor that flies out and fires an entangling net. Physical capture works on any airframe — it doesn't care how the drone is flown — but it's short-ranged and takes one target at a time.",
   cost: 80,
   radius: km(2.2),
   cooldown: 1.6,
@@ -146,6 +152,7 @@ const RF_JAMMER: Placeable = {
   name: "RF Jammer",
   code: "JAMMER",
   role: "Severs a drone's radio control link.",
+  info: "Floods a drone's control and GPS bands with noise until the link drops — most remote-piloted drones then drift, land, or turn home. A drone that never listens to a link is completely unaffected.",
   cost: 90,
   radius: km(3.5),
   cooldown: 1.1,
@@ -168,6 +175,7 @@ const AESA: Placeable = {
   name: "AESA Array",
   code: "AESA",
   role: "Phased-array radar — tracks everything, even the quiet ones.",
+  info: "An electronically-steered radar array: thousands of beam positions a second, dozens of precision tracks held at once — even on small, quiet targets. The sensor backbone of a modern grid.",
   cost: 150,
   trackCapacity: 12,
   radius: km(5.0),
@@ -187,6 +195,7 @@ const HPM: Placeable = {
   name: "HPM Emitter",
   code: "HPM",
   role: "High-power microwave — fries a whole cluster's electronics at once.",
+  info: "A directed electromagnetic pulse that overloads drone electronics wholesale. It doesn't jam the link — it cooks the circuits — so autonomy is no protection, and a tight cluster drops together.",
   cost: 170,
   radius: km(3.0),
   cooldown: 2.2,
@@ -208,6 +217,7 @@ const LASER: Placeable = {
   name: "Directed-Energy Laser",
   code: "LASER",
   role: "Precision beam — fast, long-ranged, deadly to a single target.",
+  info: "Concentrated light on target at the speed of light — silent, precise, pennies per shot, deep magazine. One airframe at a time, and it needs a clear line of sight to burn.",
   cost: 190,
   radius: km(4.6),
   cooldown: 0.7,
@@ -230,6 +240,7 @@ const PLASMA: Placeable = {
   name: "Plasma Cannon",
   code: "PLASMA",
   role: "Lobs a plasma burst that vaporizes everything in a wide radius.",
+  info: "Somewhere past today's physics sheet. The roadmap says contained plasma bursts; the demo says watch an entire cluster vanish in one shot.",
   cost: 340,
   radius: km(4.2),
   cooldown: 2.6,
@@ -250,6 +261,7 @@ const BEAM: Placeable = {
   name: "Beam Array",
   code: "BEAM",
   role: "Rapid sweeping beams that blast swarms out of the sky.",
+  info: "Late-roadmap concept hardware — a sweeping energy lattice tuned for saturation attacks. When the swarm gets truly stupid-big, this is the counter.",
   cost: 320,
   radius: km(5.2),
   cooldown: 0.5,

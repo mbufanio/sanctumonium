@@ -9,9 +9,26 @@
  * The HUD sits at the screen edges so the centre of the field stays open for
  * taps; only the actual controls capture pointer events.
  */
-import { placeablesForTier, placeableById, nextUpgrade, type Placeable } from "../sim/realtime/catalog.ts";
+import { placeablesForTier, placeableById, nextUpgrade, deviceStats, type Placeable } from "../sim/realtime/catalog.ts";
+import { RANGE_SCALE } from "../sim/realtime/catalog.ts";
 import type { Recommendation } from "../sim/realtime/adaptive.ts";
 import type { GameState } from "../sim/state.ts";
+import type { ThreatTypeId } from "../sim/boss/types.ts";
+
+/** The three threat types a spec card grades a device against. */
+const MATCHUP_THREATS: Array<{ id: ThreatTypeId; icon: string; label: string }> = [
+  { id: "rf-quad", icon: "✚", label: "RF QUAD" },
+  { id: "autonomy", icon: "◆", label: "AUTONOMY" },
+  { id: "low-observable", icon: "▲", label: "STEALTH" },
+];
+
+/** Grade a matchup value into a booth-legible label + css class. */
+function grade(v: number, sensor: boolean): { label: string; cls: string } {
+  if (v <= 0) return { label: sensor ? "BLIND" : "NO EFFECT", cls: "g0" };
+  if (v < 0.5) return { label: sensor ? "FAINT" : "WEAK", cls: "g1" };
+  if (v < 0.9) return { label: "GOOD", cls: "g2" };
+  return { label: "EXCELLENT", cls: "g3" };
+}
 
 export interface ScriptedDockOpts {
   kind: "deploy" | "locked";
@@ -37,6 +54,7 @@ export class Hud {
   private cb: HudCallbacks;
   private bar: HTMLElement | null = null;
   private dock: HTMLElement | null = null;
+  private info: HTMLElement | null = null;
   private refs: Record<string, HTMLElement> = {};
 
   constructor(root: HTMLElement, cb: HudCallbacks) {
@@ -47,9 +65,90 @@ export class Hud {
   clear(): void {
     this.bar?.remove();
     this.dock?.remove();
+    this.hideInfoCard();
     this.bar = null;
     this.dock = null;
     this.refs = {};
+  }
+
+  // ---- device spec cards (tap a unit → what it is, how it really works) ----
+
+  /** The shared spec-card body: role, real-world grounding, key stats, and a
+   *  matchup meter vs each threat type — the same DOM in the floating field
+   *  card, the arcade device panel, and the palette-selection preview. */
+  private specBody(p: Placeable, level: number): HTMLElement {
+    const st = deviceStats(p, level);
+    const body = el("div", "spec-body");
+    const sensor = p.kind === "sensor";
+
+    const stats: string[] = [`<span class="spec-stat"><b>${(st.radius / RANGE_SCALE).toFixed(1)} km</b> range</span>`];
+    if (sensor) {
+      stats.push(`<span class="spec-stat"><b>${st.trackCapacity}</b> simultaneous tracks</span>`);
+    } else {
+      stats.push(`<span class="spec-stat"><b>${st.fireInterval.toFixed(1)}s</b> between shots</span>`);
+      if (st.magazine > 0) stats.push(`<span class="spec-stat"><b>${st.magazine}</b>-shot magazine · ${st.reloadTime.toFixed(1)}s reload</span>`);
+      if (st.aoe > 0) stats.push(`<span class="spec-stat"><b>${(st.aoe / RANGE_SCALE).toFixed(1)} km</b> blast radius</span>`);
+    }
+
+    const rows = MATCHUP_THREATS.map((t) => {
+      const v = sensor ? st.track[t.id] : st.effect[t.id];
+      const g = grade(v, sensor);
+      return `
+        <div class="mu-row">
+          <span class="mu-threat">${t.icon} ${t.label}</span>
+          <span class="mu-bar"><span class="mu-fill ${g.cls}" style="width:${Math.round(Math.max(0.04, v) * 100)}%"></span></span>
+          <span class="mu-tag ${g.cls}">${g.label}</span>
+        </div>`;
+    }).join("");
+
+    body.innerHTML = `
+      <div class="spec-info">${p.info}</div>
+      <div class="spec-stats">${stats.join("")}</div>
+      <div class="spec-mu">
+        <div class="mu-head">${sensor ? "CAN IT TRACK…" : "CAN IT STOP…"}</div>
+        ${rows}
+      </div>
+    `;
+    return body;
+  }
+
+  /** Floating spec card anchored near a tapped field unit (Act-1 / raids). */
+  showInfoCard(placeableId: string, level: number, anchor: { x: number; y: number }): void {
+    const p = placeableById(placeableId);
+    if (!p) return;
+    this.hideInfoCard();
+    const card = el("div", "spec-card");
+    card.id = "spec-card";
+    const head = el("div", "spec-head");
+    head.innerHTML = `
+      <span class="pal-code ${p.kind}">${p.code}</span>
+      <span class="spec-name">${p.name}</span>
+      <span class="spec-kind">${p.kind === "sensor" ? "SENSOR · the eyes" : "EFFECTOR · the stopper"}</span>
+    `;
+    const close = el("button", "spec-close") as HTMLButtonElement;
+    close.textContent = "✕";
+    close.onclick = () => {
+      this.hideInfoCard();
+      this.cb.onCloseDevice();
+    };
+    head.append(close);
+    card.append(head, this.specBody(p, level));
+    document.body.append(card);
+    // Anchor beside the unit, clamped on-screen (measure after attach).
+    const r = card.getBoundingClientRect();
+    const pad = 12;
+    let x = anchor.x + 26;
+    if (x + r.width + pad > window.innerWidth) x = anchor.x - r.width - 26;
+    const y = Math.min(Math.max(pad, anchor.y - r.height / 2), window.innerHeight - r.height - pad);
+    card.style.left = `${Math.max(pad, x)}px`;
+    card.style.top = `${y}px`;
+    requestAnimationFrame(() => card.classList.add("show"));
+    this.info = card;
+  }
+
+  hideInfoCard(): void {
+    this.info?.remove();
+    this.info = null;
   }
 
   /** Create the persistent status bar (idempotent + self-healing).
@@ -135,6 +234,19 @@ export class Hud {
           : "Pick a device to place, or tap a placed device to upgrade";
       dock.append(hint);
 
+      // Palette-selection preview: picking a device to buy shows its full spec
+      // card above the palette (between-waves planning only — mid-wave stays lean).
+      if (!midWave && state.selectedPlaceable) {
+        const sel = placeableById(state.selectedPlaceable);
+        if (sel) {
+          const preview = el("div", "spec-preview");
+          const head = el("div", "spec-head");
+          head.innerHTML = `<span class="pal-code ${sel.kind}">${sel.code}</span><span class="spec-name">${sel.name}</span><span class="spec-kind">${sel.kind === "sensor" ? "SENSOR · the eyes" : "EFFECTOR · the stopper"}</span>`;
+          preview.append(head, this.specBody(sel, 0));
+          dock.append(preview);
+        }
+      }
+
       const palette = el("div", "palette");
       for (const p of placeablesForTier(state.maxTier)) {
         if (state.level.restrictedPlaceables.includes(p.id)) continue; // e.g. urban → no laser
@@ -165,6 +277,9 @@ export class Hud {
         <span class="dp-lvl">LVL ${dev.level + 1}</span>
       </div>
     `;
+    // Spec card inline: the upgrade decision should be informed by what the
+    // device actually is and what it's good against.
+    panel.append(this.specBody(p, dev.level));
     const actions = el("div", "dp-actions");
     if (step) {
       const afford = state.currency >= step.cost;

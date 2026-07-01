@@ -93,13 +93,19 @@ const DRILL_B: Array<[number, ThreatTypeId, number]> = [
   [0.6, "autonomy", 240], [0.95, "rf-quad", 240], [1.3, "rf-quad", 240],
 ];
 
+// Act-1 fiction (the coherent version of the industry's real problem): the site
+// fields six units from six vendors and NOTHING IS WIRED TOGETHER — classic
+// stovepiped C-UAS. The enemy probes that seam with two raids (leaks), hits with
+// a coordinated strike (barely held, manual), the coordination layer is patched
+// in, and the SAME raid profiles come back and get swept. The wave labels carry
+// the story: same raids, the only change is whether the grid is one system.
 function act1DrillSchedule(): ScheduleEntry[] {
   return [
-    { type: "wave", wave: makeDrill(1, "DRILL 1 · NO COORDINATION", DRILL_A, DRILL_RADIUS) },
-    { type: "wave", wave: makeDrill(2, "DRILL 2 · NO COORDINATION", DRILL_B, DRILL_RADIUS) },
+    { type: "wave", wave: makeDrill(1, "RAID 1 · SYSTEMS ALONE", DRILL_A, DRILL_RADIUS) },
+    { type: "wave", wave: makeDrill(2, "RAID 2 · SYSTEMS ALONE", DRILL_B, DRILL_RADIUS) },
     BOSS_1,
-    { type: "wave", wave: makeDrill(3, "DRILL 3 · COORDINATED", DRILL_A, DRILL_RADIUS) },
-    { type: "wave", wave: makeDrill(4, "DRILL 4 · COORDINATED", DRILL_B, DRILL_RADIUS) },
+    { type: "wave", wave: makeDrill(3, "RAID 3 · ONE SYSTEM", DRILL_A, DRILL_RADIUS) },
+    { type: "wave", wave: makeDrill(4, "RAID 4 · ONE SYSTEM", DRILL_B, DRILL_RADIUS) },
     BOSS_2,
   ];
 }

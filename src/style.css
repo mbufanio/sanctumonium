@@ -303,11 +303,56 @@ body {
 #threat-flash.show { animation: threatpulse 1.5s ease forwards; }
 #threat-flash .tf-k { font-family: var(--mono); letter-spacing: 0.3em; font-size: 0.9rem; color: #ff8a4a; }
 #threat-flash .tf-n { font-family: var(--mono); font-weight: 800; font-size: 3.4rem; color: #ff8a4a; text-shadow: 0 0 24px rgba(255, 100, 60, 0.7); line-height: 1; }
+#threat-flash .tf-pay { font-family: var(--mono); font-weight: 700; font-size: 0.85rem; letter-spacing: 0.14em; color: var(--good); margin-top: 0.4rem; text-shadow: 0 0 14px rgba(74, 222, 128, 0.5); }
 @keyframes threatpulse {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
   18% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
   70% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Device spec cards — tap a unit (or pick a palette card) for how it works. */
+.spec-card {
+  position: fixed; z-index: 36; width: min(340px, 86vw);
+  background: linear-gradient(180deg, rgba(14, 26, 38, 0.97), rgba(9, 18, 26, 0.97));
+  border: 1px solid var(--panel-edge); border-radius: 12px; padding: 0.8rem 0.9rem;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.55);
+  opacity: 0; transform: translateY(6px); transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.spec-card.show { opacity: 1; transform: none; }
+.spec-head { display: flex; align-items: center; gap: 0.5rem; }
+.spec-name { font-weight: 800; color: var(--text); font-size: 0.95rem; }
+.spec-kind { margin-left: auto; font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; color: var(--text-dim); }
+.spec-close {
+  flex: none; margin-left: 0.4rem; width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--panel-edge); background: transparent; color: var(--text-dim); font-size: 0.85rem;
+}
+.spec-close:hover { color: var(--text); border-color: var(--text-dim); }
+.spec-body { margin-top: 0.55rem; }
+.spec-info { font-size: 0.8rem; line-height: 1.45; color: var(--text); }
+.spec-stats { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; margin-top: 0.55rem; }
+.spec-stat { font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim); }
+.spec-stat b { color: var(--text); font-weight: 700; }
+.spec-mu { margin-top: 0.6rem; }
+.mu-head { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.16em; color: var(--text-dim); margin-bottom: 0.3rem; }
+.mu-row { display: grid; grid-template-columns: 6.2rem 1fr 5.4rem; align-items: center; gap: 0.5rem; margin-top: 0.25rem; }
+.mu-threat { font-family: var(--mono); font-size: 0.66rem; color: var(--threat-track); }
+.mu-bar { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.mu-fill { display: block; height: 100%; border-radius: 4px; }
+.mu-fill.g0 { background: var(--bad); }
+.mu-fill.g1 { background: var(--seam); }
+.mu-fill.g2, .mu-fill.g3 { background: var(--good); }
+.mu-tag { font-family: var(--mono); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-align: right; }
+.mu-tag.g0 { color: var(--bad); }
+.mu-tag.g1 { color: var(--seam); }
+.mu-tag.g2, .mu-tag.g3 { color: var(--good); }
+/* Embedded variants: inside the arcade device panel & above the palette. */
+.dev-panel .spec-body { max-width: 460px; }
+.spec-preview {
+  border: 1px solid var(--panel-edge); border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 0.5rem;
+  background: linear-gradient(180deg, rgba(14, 26, 38, 0.96), rgba(9, 18, 26, 0.96));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  max-width: 560px;
 }
 
 /* Drill teaching pause — the freeze-frame "why they leak / why it holds" panel. */

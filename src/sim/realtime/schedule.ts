@@ -64,23 +64,33 @@ export function makeArcadeWave(n: number): WaveDef {
   // bends up hard through the mid game: a casually-built grid is overwhelmed in
   // a couple of minutes (we want to get to the sales conversation, not run a
   // 10-minute survival marathon), while a try-hard optimal grid still lasts
-  // meaningfully longer.
-  const total = 5 + Math.round(2 * n + 0.22 * n * n);
+  // meaningfully longer. The first waves are deliberately light so the player
+  // gets to SEE their new toys work before the bend.
+  const total = 4 + Math.round(1.7 * n + 0.25 * n * n);
   const speed = 1 + n * 0.085; // everything gets faster
   const gap = Math.max(0.045, 0.5 * Math.pow(0.92, n)); // and arrives much DENSER each wave
   // Hardened bodies ramp in from ~wave 7 — late drones survive a single hit, so
   // even one-shot area weapons can't clear the swarm forever.
   const hpMul = 1 + Math.floor(Math.max(0, n - 6) / 5);
   const swarmy = n >= 3;
+  // Threat mix RAMPS: the opening waves are RF quads (the Act-1 tier-1 grid
+  // still earns its keep), autonomy drones phase in from wave 2 and stealth
+  // from wave 4 — so the harder types arrive as the REASON to buy tier-2/3
+  // gear, not as a wave-1 wall the starter grid can't answer.
+  const loFrac = Math.min(0.3, Math.max(0, n - 3) * 0.075);
+  const autoFrac = Math.min(0.3, Math.max(0, n - 1) * 0.075);
+  // Bounty starts richer and decays: early kills bankroll the tier-3 spectacle
+  // purchase (~wave 4-6); late kills can't outrun the escalation.
+  const bountyMul = Math.max(0.4, 0.8 - 0.03 * n);
   const spawns: SpawnEntry[] = [];
   for (let i = 0; i < total; i++) {
     const r = (i * 0.61803) % 1; // even-ish type spread
-    const typeId: ThreatTypeId = r > 0.7 ? "low-observable" : r > 0.4 ? "autonomy" : "rf-quad";
+    const typeId: ThreatTypeId = r < loFrac ? "low-observable" : r < loFrac + autoFrac ? "autonomy" : "rf-quad";
     spawns.push({
       at: 0.4 + i * gap,
       typeId,
       bearing: ((i * 360) / total + n * 37) % 360,
-      mods: { speedMul: speed, size: swarmy ? 0.7 : 1, bountyMul: 0.55, hpMul },
+      mods: { speedMul: speed, size: swarmy ? 0.7 : 1, bountyMul, hpMul },
     });
   }
   return { index: 1000 + n, kind: "normal", label: `WAVE ${n}`, spawns, stipend: 0 };

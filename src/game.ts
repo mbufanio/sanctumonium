@@ -238,6 +238,7 @@ export class Game {
     if (!s.rt) return;
     this.drillFreezeArmed = false;
     this.drillFrozen = true;
+    this.hud.hideInfoCard(); // the freeze panel takes the stage
     const diags = diagnoseDrill(s.rt, s.placed, coordinated, this.terrain);
     if (diags.length === 0) { this.drillFrozen = false; return; } // nothing to teach — carry on
     this.operator.say(
@@ -282,8 +283,8 @@ export class Game {
     panel.className = "freeze-panel";
     const heading = coordinated ? "HOLD · WHY IT HOLDS" : "HOLD · WHY THEY LEAK";
     const lede = coordinated
-      ? "Same threats as the first pass — one fused picture, and every one is already accounted for."
-      : "Frozen just short of the asset. Each threat below, and the reason the grid isn't stopping it.";
+      ? "The same raid that leaked before — one fused picture now, and every threat is already accounted for."
+      : "Frozen just short of the asset. Each threat below, and the reason six separate systems aren't stopping it.";
     panel.innerHTML = `<div class="freeze-h"><span class="freeze-tag">VEGA</span>${heading}</div><div class="freeze-lede">${lede}</div>`;
     const list = document.createElement("div");
     list.className = "freeze-cards";
@@ -410,7 +411,7 @@ export class Game {
       this.endRun(true);
       return;
     }
-    this.operator.setSitrep(s.level.name, s.brainUnlocked ? "coordination active" : "grid hot");
+    this.operator.setSitrep(s.level.name, s.brainUnlocked ? "one system · coordination active" : "six systems · no network");
     // Scripted Act 1: first build deploys the FIXED laydown; later builds just
     // gate the next wave (the laydown is locked — no buying, no income).
     if (!this.act1Deployed) {
@@ -434,7 +435,7 @@ export class Game {
     }
     this.deployGuided = 0;
     this.world.setGuide(this.deployQueue[0]?.hex ?? null);
-    this.sayOnce("deploy", "Stand up the grid. Tap each lit position — this is the whole laydown, and it's all you get.");
+    this.sayOnce("deploy", "Your gear just arrived — six units, off six different trucks. Nothing's wired together yet. Stand them up: tap each lit position.");
     this.refreshDeployDock();
   }
 
@@ -481,7 +482,8 @@ export class Game {
     this.deployQueue = [];
     this.act1Deployed = true;
     this.world.setGuide(null);
-    this.sayOnce("gridup", "Grid's up. Same gear the whole way — the only thing we'll change is whether it talks to itself.");
+    this.sayOnce("gridup", "Grid's up — every unit self-tests green. One problem: that's six separate systems. No shared picture, no fire plan. Each one fights alone.");
+    this.sayOnce("speccard", "Tap any unit on the field for its spec card. Start the raid when you're ready.");
     this.hud.showScriptedDock(this.state, { kind: "locked", startLabel: this.nextEntryLabel(), onStart: () => this.startScheduleEntry() });
   }
 
@@ -502,7 +504,7 @@ export class Game {
     if (this.state.act === "arcade") return "◆ BEGIN THE ONSLAUGHT";
     const entry = this.state.level.schedule[this.state.scheduleIndex];
     if (!entry) return "Finish";
-    if (entry.type === "boss") return `⚠ Boss attack — Step ${this.state.scheduleIndex + 1}`;
+    if (entry.type === "boss") return entry.bossIndex === 1 ? "⚠ Main strike inbound — engage" : "⚠ Second strike inbound — engage";
     return `Start ${entry.wave.label}`;
   }
 
@@ -523,18 +525,18 @@ export class Game {
     const first = !this.said.has(key);
     this.said.add(key);
     if (!coordinated) {
-      this.operator.setSitrep(s.level.name, "drill · no coordination");
+      this.operator.setSitrep(s.level.name, "raid inbound · systems alone");
       this.operator.say(
         first
-          ? "No coordination — so every effector just shoots whatever's NEAREST it. Watch: a net keeps firing on the contact right on top of it and never turns to the one that's slipped past, closest to the asset. I'll freeze it and show you, target by target."
-          : "Again, no plan — every effector on its own nearest contact. Same fault, a nastier stream. Watch the leaders walk in.",
+          ? "Raid inbound — they're probing us. Six separate systems, so every effector picks its own target: whatever's nearest ITSELF. Watch the nets service what's on top of them while the leaders slip past. I'll freeze it and walk you through, target by target."
+          : "They're probing again, harder — it worked last time. Still six systems, still no shared picture. Watch the leaders walk in.",
       );
     } else {
-      this.operator.setSitrep(s.level.name, "drill · coordinated");
+      this.operator.setSitrep(s.level.name, "raid inbound · one system");
       this.operator.say(
         first
-          ? "Same six devices, same push — but now the plan targets by URGENCY and matchup, not by whatever's nearest. Each effector takes the most-dangerous thing it can actually kill — leaders first, a net for the autonomy, never the jammer — and holds it. Watch the pass-overs from the first run get answered."
-          : "Coordination holding. Same gear, same stream — urgent-first, right tool on each, nothing through.",
+          ? "Same raid profile coming back — why change what worked? Except the layer's up now. One fused picture; every effector assigned by URGENCY and matchup — a net for the autonomy, never the jammer. Watch every pass-over from the first raid get answered."
+          : "Coordination holding. Same gear, same raid — right effector on each, leaders first. Nothing through.",
         { accent: true },
       );
     }
@@ -567,6 +569,7 @@ export class Game {
       this.world.setGuide(null);
       // Ops act builds between waves only — the dock closes for the fight.
       this.hud.hideBuild();
+      this.hud.hideInfoCard();
       if (entry.wave.drill) {
         // Arm one teaching pause for this drill (never in the attract-bot demo).
         this.drillFreezeArmed = !this.attract;
@@ -574,11 +577,11 @@ export class Game {
         this.hideDrillFreeze();
         this.narrateDrill(s.brainUnlocked);
       } else if (!s.brainUnlocked) {
-        this.operator.setSitrep(s.level.name, "threat inbound");
-        this.sayOnce("ragged", "Units are doing their best, but they're not talking to each other. It's messy.");
+        this.operator.setSitrep(s.level.name, "threat inbound · systems alone");
+        this.sayOnce("ragged", "Every unit is doing its own job. Nobody is doing the site's job. It's going to be messy.");
       } else {
-        this.operator.setSitrep(s.level.name, "coordination active");
-        this.sayOnce("fused", "Tracks are fused — every shooter's working off one picture now.", { accent: true });
+        this.operator.setSitrep(s.level.name, "one system · coordination active");
+        this.sayOnce("fused", "Tracks fused — every effector is working off one picture now.", { accent: true });
         this.sayOnce("samegear", "Same units. Now they're one system. Feel the difference.");
       }
     } else {
@@ -597,9 +600,9 @@ export class Game {
       if (s.activeWave.drill) {
         const leaked = s.leaked - this.drillLeaksAtStart;
         if (leaked > 0) {
-          this.operator.say(`${leaked} got through — passed over while an effector fired on whatever was nearest it, not on the one about to hit us. Same weapons; wrong choices. A coordination problem.`);
+          this.operator.say(`${leaked} through. Every unit did its own job — nearest target, every time. The problem is nobody's job was the ones that mattered. The gear could have held this; it needs one plan.`);
         } else {
-          this.operator.say("Clean sweep. Same six devices, same stream — the plan just put the right effector on the right threat, urgent-first. That's the whole pitch.", { accent: true });
+          this.operator.say("Clean sweep — the same six units that leaked before. The gear didn't change; the targeting did. That's the product.", { accent: true });
         }
       }
     }
@@ -635,21 +638,27 @@ export class Game {
     s.currency += reward;
     s.score += reward * 0.5;
     const next = adaptWave(makeArcadeWave(s.arcadeWave), s.placed, this.world.spawnRadius(s), this.rng, this.terrain);
-    s.activeWave = offsetWave(next, s.rt.time + 0.3);
+    // Early waves leave a BREATHER before the next batch — a real window to
+    // spend the payout and place gear. It shrinks to nothing by ~wave 9, when
+    // the onslaught becomes the wall-of-pressure the act is named for.
+    const breather = Math.max(0.4, 3.4 - 0.35 * s.arcadeWave);
+    s.activeWave = offsetWave(next, s.rt.time + breather);
     s.rt.spawnCursor = 0;
-    this.flashThreatLevel(s.arcadeWave);
+    this.flashThreatLevel(s.arcadeWave, reward);
     this.refreshBuildDock();
   }
 
-  /** A brief centre-screen "THREAT LEVEL N" pulse as each arcade wave rolls in. */
-  private flashThreatLevel(n: number): void {
+  /** A brief centre-screen "THREAT LEVEL N" pulse as each arcade wave rolls in,
+   *  with the survival payout so income is legible mid-fight. */
+  private flashThreatLevel(n: number, reward = 0): void {
     let el = document.getElementById("threat-flash");
     if (!el) {
       el = document.createElement("div");
       el.id = "threat-flash";
       document.body.append(el);
     }
-    el.innerHTML = `<div class="tf-k">THREAT LEVEL</div><div class="tf-n">${n}</div>`;
+    const pay = reward > 0 ? `<div class="tf-pay">+$${reward} · REINFORCE NOW</div>` : "";
+    el.innerHTML = `<div class="tf-k">THREAT LEVEL</div><div class="tf-n">${n}</div>${pay}`;
     el.classList.remove("show");
     void el.offsetWidth; // restart the animation
     el.classList.add("show");
@@ -673,7 +682,16 @@ export class Game {
     s.phase = "boss";
     s.boss = session;
     this.hud.clear();
-    this.operator.setSitrep(s.level.name, bossIndex === 1 ? "coordinated strike — manual" : "coordinated strike — brain online");
+    this.operator.setSitrep(s.level.name, bossIndex === 1 ? "main strike — manual assignment" : "second strike — layer assisting");
+    // Bind the strike into the raid story: the probes found the seam; this is
+    // the push that exploits it. Boss #1 the player IS the missing coordination.
+    this.sayOnce(
+      bossIndex === 1 ? "boss1-intro" : "boss2-intro",
+      bossIndex === 1
+        ? "There's the strike the raids were scouting for — three signatures at once. No layer yet, so you're the coordination: pick the eyes and the shooter for each. Match by what beats what, not what's closest."
+        : "Second strike, same shape. This time the layer computes the odds with you — watch how fast the right pairing surfaces.",
+      { accent: bossIndex === 2 },
+    );
     this.console.render(session);
   }
 
@@ -734,6 +752,10 @@ export class Game {
     // Arcade turns the economy back ON. Seed a prep budget so the player can
     // stand up tier-3 gear before the onslaught (and earn more from kills).
     this.state.currency = Game.ARCADE_PREP_BUDGET;
+    // Fresh act, fresh site: repair crews make the asset whole so every player
+    // starts the survival run from the same baseline — the arcade leaderboard
+    // measures arcade play, not how battered Act 1 left the site.
+    this.state.integrity = this.state.maxIntegrity;
     this.state.scheduleIndex++;
     this.enterBuild();
   }
@@ -860,8 +882,15 @@ export class Game {
       return this.world.screenToHex(e.clientX - rect.left, e.clientY - rect.top);
     };
     canvas.addEventListener("pointerdown", (e) => {
-      if (!this.canBuild()) return;
-      this.handleFieldTap(toHex(e as PointerEvent));
+      if (this.canBuild()) {
+        this.handleFieldTap(toHex(e as PointerEvent));
+        return;
+      }
+      // Outside a build window (raids, freeze-frames) the field is still
+      // inspectable: tap any placed unit for its spec card.
+      if (!this.attract && this.state.act === "ops" && this.state.phase === "wave") {
+        this.inspectAt(toHex(e as PointerEvent));
+      }
     });
     canvas.addEventListener("pointermove", (e) => {
       if (!this.canBuild()) return;
@@ -878,9 +907,11 @@ export class Game {
     if (this.attract) return; // attract taps exit the demo, never place
     const s = this.state;
     // Scripted Act 1: a tap deploys the next guided device at its FIXED hex
-    // (location is pre-scripted — the laydown can't change). Otherwise locked.
+    // (location is pre-scripted — the laydown can't change). Once the grid is
+    // up, taps inspect: any placed unit opens its spec card.
     if (s.act === "ops") {
       if (!this.act1Deployed && this.deployQueue.length > 0) this.deployNext();
+      else this.inspectAt(_hex);
       return;
     }
     const hex = _hex;
@@ -909,6 +940,20 @@ export class Game {
     if (s.currency < p.cost) s.selectedPlaceable = null;
     this.refreshBuildDock();
     this.updateGhost();
+  }
+
+  /** Tap-to-inspect (Act 1): a placed unit opens its floating spec card, pinned
+   *  beside the unit; tapping empty field (or the unit again) dismisses it. */
+  private inspectAt(hex: Hex): void {
+    const s = this.state;
+    const occupant = s.placed.find((d) => hexKey(d.hex) === hexKey(hex));
+    if (!occupant || s.selectedDeviceId === occupant.id) {
+      s.selectedDeviceId = null;
+      this.hud.hideInfoCard();
+      return;
+    }
+    s.selectedDeviceId = occupant.id; // pulses the field marker
+    this.hud.showInfoCard(occupant.placeableId, occupant.level, this.world.projectToScreen(occupant.pos));
   }
 
   private sell(deviceId: string): void {

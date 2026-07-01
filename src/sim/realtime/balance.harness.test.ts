@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "../rng.ts";
 import { HEX_SIZE, hexRing, type Hex } from "../hex.ts";
-import { LEVEL_1 } from "../level.ts";
+import { LEVEL_1, act1Laydown } from "../level.ts";
 import { makePlaced } from "../state.ts";
 import { placeableById, TRACKED_KILL_BONUS } from "./catalog.ts";
 import { createRealtimeState, type PlacedDevice } from "./types.ts";
@@ -137,6 +137,72 @@ function simulateRun(strat: Strategy, seed: number): RunResult {
   return { score, integrity, kills, leaks, spent, devices: placed.length, wavesSurvived };
 }
 
+/**
+ * The REALISTIC booth player: keeps the Act-1 six-device laydown, gets the
+ * arcade prep budget, and buys down a sensible wishlist BETWEEN waves as kill
+ * bounties + survival payouts come in (mirrors the live game's economy). This
+ * is the run whose pacing the player actually feels — the other strategies
+ * measure layout quality with the budget ignored.
+ */
+function simulateRealistic(seed: number): RunResult {
+  const rng = new Rng(seed);
+  let currency = 450; // ARCADE_PREP_BUDGET
+  let integrity = 100;
+  let score = 0;
+  let kills = 0;
+  let leaks = 0;
+  let spent = 0;
+  let wavesSurvived = 0;
+
+  const placed: PlacedDevice[] = act1Laydown(LEVEL_1).map((it) => makePlaced(it.placeableId, it.hex));
+  const occupied = new Set(placed.map((d) => `${d.hex.q},${d.hex.r}`));
+  // A sensible booth-player wishlist: sensor backbone first, then the shiny
+  // effectors, on rings the Act-1 laydown leaves free.
+  const wishlist: PlacePlan[] = [
+    { hex: ringCell(3, 3), placeableId: "aesa" },
+    { hex: ringCell(2, 2), placeableId: "laser" },
+    { hex: ringCell(2, 6), placeableId: "hpm" },
+    { hex: ringCell(3, 9), placeableId: "plasma" },
+    { hex: ringCell(4, 0), placeableId: "aesa" },
+    { hex: ringCell(2, 10), placeableId: "beam" },
+    { hex: ringCell(4, 8), placeableId: "laser" },
+    { hex: ringCell(4, 16), placeableId: "hpm" },
+    { hex: ringCell(3, 15), placeableId: "plasma" },
+    { hex: ringCell(5, 4), placeableId: "beam" },
+  ];
+
+  for (let n = 1; n <= MAX_WAVE && integrity > 0; n++) {
+    // Between waves: buy down the wishlist while affordable (live economy).
+    while (wishlist.length) {
+      const item = wishlist[0];
+      const p = placeableById(item.placeableId)!;
+      if (currency < p.cost) break;
+      wishlist.shift();
+      const key = `${item.hex.q},${item.hex.r}`;
+      if (occupied.has(key)) continue;
+      currency -= p.cost;
+      spent += p.cost;
+      placed.push(makePlaced(item.placeableId, item.hex));
+      occupied.add(key);
+    }
+    for (const d of placed) { d.cooldown = 0; d.ammo = d.magazine; d.reloadCd = 0; }
+    const rt = createRealtimeState();
+    const wave = adaptWave(makeArcadeWave(n), placed, SPAWN_RADIUS, rng);
+    for (let i = 0; i < 6000 && integrity > 0; i++) {
+      const res = stepWave(rt, placed, wave, 1 / 60, rng, { spawnRadius: SPAWN_RADIUS, coordinated: true });
+      for (const k of res.kills) { currency += k.bounty; score += k.bounty * (k.tracked ? TRACKED_KILL_BONUS : 1); kills++; }
+      for (const l of res.leaks) { integrity -= l.damage; leaks++; }
+      if (res.waveComplete) break;
+    }
+    if (integrity > 0) {
+      wavesSurvived++;
+      currency += 30 + (n + 1) * 10; // survival payout (mirrors rollArcadeWave)
+    }
+  }
+
+  return { score, integrity, kills, leaks, spent, devices: placed.length, wavesSurvived };
+}
+
 function avg(ns: number[]): number {
   return ns.reduce((a, b) => a + b, 0) / ns.length;
 }
@@ -151,29 +217,42 @@ describe("BALANCE & PACING ANALYSIS (arcade survival)", () => {
   const SEEDS = 12;
   const agg: Record<string, Agg> = {};
   const rows: string[] = ["strategy        score   integ  kills  leaks  devices  spent  waves"];
-  for (const strat of STRATEGIES) {
-    const rs: RunResult[] = [];
-    for (let seed = 1; seed <= SEEDS; seed++) rs.push(simulateRun(strat, seed));
-    agg[strat.name] = {
+  const report = (name: string, rs: RunResult[]) => {
+    agg[name] = {
       score: avg(rs.map((r) => r.score)),
       leaks: avg(rs.map((r) => r.leaks)),
       wavesSurvived: avg(rs.map((r) => r.wavesSurvived)),
     };
     rows.push(
       [
-        strat.name.padEnd(15),
-        agg[strat.name].score.toFixed(0).padStart(6),
+        name.padEnd(15),
+        agg[name].score.toFixed(0).padStart(6),
         avg(rs.map((r) => r.integrity)).toFixed(0).padStart(6),
         avg(rs.map((r) => r.kills)).toFixed(0).padStart(6),
-        agg[strat.name].leaks.toFixed(0).padStart(6),
+        agg[name].leaks.toFixed(0).padStart(6),
         avg(rs.map((r) => r.devices)).toFixed(0).padStart(8),
         avg(rs.map((r) => r.spent)).toFixed(0).padStart(6),
-        agg[strat.name].wavesSurvived.toFixed(1).padStart(6),
+        agg[name].wavesSurvived.toFixed(1).padStart(6),
       ].join(" "),
     );
+  };
+  for (const strat of STRATEGIES) {
+    const rs: RunResult[] = [];
+    for (let seed = 1; seed <= SEEDS; seed++) rs.push(simulateRun(strat, seed));
+    report(strat.name, rs);
+  }
+  {
+    const rs: RunResult[] = [];
+    for (let seed = 1; seed <= SEEDS; seed++) rs.push(simulateRealistic(seed));
+    report("realistic", rs);
   }
   // eslint-disable-next-line no-console
   console.log("\n" + rows.join("\n") + "\n");
+
+  it("the realistic booth player gets a substantial run (sees the ramp, buys the toys) but always ends", () => {
+    expect(agg["realistic"].wavesSurvived).toBeGreaterThanOrEqual(5);
+    expect(agg["realistic"].wavesSurvived).toBeLessThan(20);
+  });
 
   // ---- guardrails: coordination must clearly beat the rest (spec §8) --------
 

@@ -42,9 +42,11 @@ export class Screens {
       <h1 class="screen-h1">Hostile drones inbound.</h1>
       <h2 class="screen-h2">You'll have the gear. We'll see if that's enough.</h2>
       <p class="screen-body op-attrib">
-        <span class="op-cs">◈ VEGA</span> A coordinated strike is closing on the
-        site. You've got sensors and shooters. Whether that adds up to a
-        <em>defense</em> — that's what we're here to find out.
+        <span class="op-cs">◈ VEGA</span> A strike is forming up on this site,
+        and your defense is arriving in pieces — radars, jammers, interceptors,
+        six units from six vendors, none of them talking to each other. Whether
+        a pile of gear adds up to a <em>defense</em> — that's what we're here to
+        find out.
       </p>
     `;
     const btn = button("Begin", "screen-cta");
