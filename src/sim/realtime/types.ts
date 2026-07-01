@@ -64,6 +64,10 @@ export interface Drone {
   tracked: boolean;
   /** Stable per-drone track number for the telemetry readout (e.g. 0147). */
   trackId: number;
+  /** Device ids of the sensors ASSIGNED to track it this step (drill mode uses
+   *  finite track capacity, so this can be empty — a seam — or doubled-up — a
+   *  waste). Drives the coordination-failure callouts. */
+  trackerIds: string[];
   /** Visual scale (1 = normal; smaller for swarm drones). */
   size: number;
 }
@@ -76,7 +80,12 @@ export type Fx =
   // Brain coordination: a sensor handing a track to the effector engaging it.
   | { kind: "handoff"; from: Px; to: Px }
   // Area effector blast (HPM / plasma / beam): a ring expanding at `at`.
-  | { kind: "aoe"; at: Px; radius: number; effector: string };
+  | { kind: "aoe"; at: Px; radius: number; effector: string }
+  // ---- drill callouts (Act-1 coordination-failure demo) ------------------
+  // Two+ effectors piled onto the same drone in a step (wasted, uncoordinated).
+  | { kind: "dogpile"; at: Px }
+  // An UNTRACKED drone reached the asset — the seam nobody was watching.
+  | { kind: "seam"; at: Px };
 
 /**
  * Per-spawn stat modifiers — how a level expresses its threat "wrinkle" without
@@ -111,6 +120,16 @@ export interface WaveDef {
   spawns: SpawnEntry[];
   /** Currency granted when the wave is cleared. */
   stipend: number;
+  /** Act-1 coordination drill: sensors run FINITE track capacity (so they can
+   *  waste effort double-tracking), the field draws failure callouts, and the
+   *  sim runs in slow-motion. Absent/false for normal + arcade waves. */
+  drill?: boolean;
+  /** Slow-motion factor for a drill (0.5 = half speed). 1 / undefined = normal. */
+  timeScale?: number;
+  /** Drill spawn radius override (plane units). Drills spawn drones just outside
+   *  the ring-3 sensor line so they engage the small grid together, rather than
+   *  from the far field edge. Absent = use the level's normal spawn radius. */
+  spawnRadius?: number;
 }
 
 /** The live real-time simulation state for the current wave. */
@@ -126,8 +145,12 @@ export interface RealtimeState {
   /** Tallies for scoring/economy. */
   killed: number;
   leaked: number;
+  /** Drill mode only: sticky sensor→drone locks. Uncoordinated sensors HOLD a
+   *  target once acquired (so two can stay stuck on one drone while another
+   *  slips in untracked); the coordinated manager reallocates every step. */
+  sensorLocks: Record<string, number>;
 }
 
 export function createRealtimeState(): RealtimeState {
-  return { time: 0, drones: [], nextDroneId: 1, spawnCursor: 0, fx: [], killed: 0, leaked: 0 };
+  return { time: 0, drones: [], nextDroneId: 1, spawnCursor: 0, fx: [], killed: 0, leaked: 0, sensorLocks: {} };
 }

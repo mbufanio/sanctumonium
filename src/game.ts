@@ -48,11 +48,10 @@ export class Game {
   private leaderboard: LeaderboardUI;
   /** Scripted Act-1 operator lines fire once per run (guard against replays). */
   private said = new Set<string>();
-  /** Scripted Act-1 fixed-laydown deploy (guide a few, then deploy the rest). */
+  /** Scripted Act-1 fixed-laydown deploy (player places every device). */
   private deployQueue: LaydownItem[] = [];
   private deployGuided = 0;
   private act1Deployed = false;
-  private static readonly DEPLOY_GUIDED = 3;
   /** Asset repair rate (integrity/sec) once coordination is online — the brain
    *  frees the site to recover. Off pre-coordination, so HP genuinely sinks. */
   private static readonly COORD_REGEN = 1.8;
@@ -160,7 +159,17 @@ export class Game {
     const s = this.state;
     if (!s.rt || !s.activeWave) return;
     const coordinated = s.brainUnlocked && !s.brainStaffDisabled;
-    const res = stepWave(s.rt, s.placed, s.activeWave, dt, this.rng, { spawnRadius: this.world.spawnRadius(s), coordinated, terrain: this.terrain });
+    // Act-1 drills run in slow-motion with finite sensor track capacity so the
+    // coordination failures (double-track / dogpile / seam) are legible.
+    const drill = !!s.activeWave.drill;
+    if (drill) dt *= s.activeWave.timeScale ?? 0.5;
+    const res = stepWave(s.rt, s.placed, s.activeWave, dt, this.rng, {
+      spawnRadius: (drill && s.activeWave.spawnRadius) || this.world.spawnRadius(s),
+      coordinated,
+      terrain: this.terrain,
+      trackLimited: drill,
+      trackCapacity: 1,
+    });
 
     for (const k of res.kills) {
       // Act 1 is a scripted demo (no economy) — kills earn money only in the
@@ -307,7 +316,7 @@ export class Game {
     }
   }
 
-  // ---- scripted Act-1 fixed-laydown deploy (guide a few, then deploy) -----
+  // ---- scripted Act-1 fixed-laydown deploy (player places every device) ----
 
   private startDeploy(): void {
     if (this.attract) {
@@ -318,24 +327,22 @@ export class Game {
     }
     this.deployGuided = 0;
     this.world.setGuide(this.deployQueue[0]?.hex ?? null);
-    this.sayOnce("deploy", "Stand up the grid. Drop a radar on the north approach — tap where it's lit.");
+    this.sayOnce("deploy", "Stand up the grid. Tap each lit position — this is the whole laydown, and it's all you get.");
     this.refreshDeployDock();
   }
 
   private refreshDeployDock(): void {
-    const ready = this.deployGuided >= Game.DEPLOY_GUIDED || this.deployQueue.length === 0;
     this.hud.showScriptedDock(this.state, {
       kind: this.deployQueue.length === 0 ? "locked" : "deploy",
-      deployReady: ready,
       placed: this.state.placed.length,
       total: this.state.placed.length + this.deployQueue.length,
       startLabel: this.nextEntryLabel(),
-      onDeployRest: () => this.deployRest(),
       onStart: () => this.startScheduleEntry(),
     });
   }
 
-  /** Place the next queued device at its SCRIPTED hex (a guided tap). */
+  /** Place the next queued device at its SCRIPTED hex (a guided tap). The player
+   *  places EVERY device — no auto-fill — so they own the whole laydown. */
   private deployNext(): void {
     const item = this.deployQueue.shift();
     if (!item) return;
@@ -345,17 +352,18 @@ export class Game {
       this.finishDeploy();
       return;
     }
-    if (this.deployGuided < Game.DEPLOY_GUIDED) {
-      this.world.setGuide(this.deployQueue[0].hex);
-      if (this.deployGuided === 1) this.operator.say("Good. Now a sensor and an effector — keep going.");
-    } else {
-      this.world.setGuide(null);
-      this.operator.say("You've got the idea. I'll drop the rest of the grid.");
+    this.world.setGuide(this.deployQueue[0].hex);
+    // Light coaching on the first sensor and first effector; then get out of the way.
+    const next = this.deployQueue[0];
+    if (this.deployGuided === 1) this.operator.say("Sensors find and track. Effectors do the stopping. Keep placing.");
+    else if (next && placeableById(next.placeableId)?.kind === "effector" && !this.said.has("first-eff")) {
+      this.said.add("first-eff");
+      this.operator.say("Now the shooters — spread them so every approach is covered.");
     }
     this.refreshDeployDock();
   }
 
-  /** Auto-place every remaining scripted device at once ("Deploy the rest"). */
+  /** Auto-place every remaining scripted device at once (attract bot only). */
   private deployRest(): void {
     for (const item of this.deployQueue) this.state.placed.push(makePlaced(item.placeableId, item.hex));
     this.deployQueue = [];
@@ -366,7 +374,7 @@ export class Game {
     this.deployQueue = [];
     this.act1Deployed = true;
     this.world.setGuide(null);
-    this.sayOnce("gridup", "Grid's up. This is everything you've got — same gear the whole way. Brace.");
+    this.sayOnce("gridup", "Grid's up. Same gear the whole way — the only thing we'll change is whether it talks to itself.");
     this.hud.showScriptedDock(this.state, { kind: "locked", startLabel: this.nextEntryLabel(), onStart: () => this.startScheduleEntry() });
   }
 
@@ -391,6 +399,36 @@ export class Game {
     return `Start ${entry.wave.label}`;
   }
 
+  /** Sim leaks at the moment a drill started (to report the drill's damage). */
+  private drillLeaksAtStart = 0;
+
+  /** VEGA sets up a coordination drill — names the failure to watch for
+   *  (uncoordinated) or the fix to watch land (coordinated). */
+  private narrateDrill(coordinated: boolean): void {
+    const s = this.state;
+    this.drillLeaksAtStart = s.leaked;
+    this.operator.clearLines(); // drop any lingering deploy chatter — this is a new beat
+    const key = coordinated ? "drill-coord-seen" : "drill-uncoord-seen";
+    const first = !this.said.has(key);
+    this.said.add(key);
+    if (!coordinated) {
+      this.operator.setSitrep(s.level.name, "drill · no coordination");
+      this.operator.say(
+        first
+          ? "Watch closely. Six devices, no shared picture — every sensor locks the one loudest threat and the rest fly the whole approach unwatched."
+          : "Again — same six devices, still no coordination. Watch the red rings: those are the lanes nobody's covering.",
+      );
+    } else {
+      this.operator.setSitrep(s.level.name, "drill · coordinated");
+      this.operator.say(
+        first
+          ? "Same six devices — but now they share one picture. Every threat gets its own eyes and its own shooter. Watch nothing get through."
+          : "Coordination holding. Same gear, same threats as before — the difference is all in the picture.",
+        { accent: true },
+      );
+    }
+  }
+
   /** Player pressed "start" in the build dock → run the next schedule entry. */
   private startScheduleEntry(): void {
     const s = this.state;
@@ -406,8 +444,11 @@ export class Game {
     if (entry.type === "wave") {
       s.phase = "wave";
       s.rt = createRealtimeState();
-      // Adaptive enemy: bias this wave's spawns toward the layout's seams.
-      s.activeWave = adaptWave(entry.wave, s.placed, this.world.spawnRadius(s), this.rng, this.terrain);
+      // Drills run their EXACT scripted spawns (the bearings are the lesson);
+      // normal waves get the adaptive seam-probing bias.
+      s.activeWave = entry.wave.drill
+        ? entry.wave
+        : adaptWave(entry.wave, s.placed, this.world.spawnRadius(s), this.rng, this.terrain);
       for (const d of s.placed) { d.cooldown = 0; d.ammo = d.magazine; d.reloadCd = 0; }
       s.selectedDeviceId = null;
       s.selectedPlaceable = null;
@@ -415,12 +456,13 @@ export class Game {
       this.world.setGuide(null);
       // Ops act builds between waves only — the dock closes for the fight.
       this.hud.hideBuild();
-      this.operator.setSitrep(s.level.name, "threat inbound");
-      // Beat 3 — name the raggedness on the very first wave (plants the problem
-      // the unlock will answer). Post-unlock, name the lived difference once.
-      if (!s.brainUnlocked) {
+      if (entry.wave.drill) {
+        this.narrateDrill(s.brainUnlocked);
+      } else if (!s.brainUnlocked) {
+        this.operator.setSitrep(s.level.name, "threat inbound");
         this.sayOnce("ragged", "Units are doing their best, but they're not talking to each other. It's messy.");
       } else {
+        this.operator.setSitrep(s.level.name, "coordination active");
         this.sayOnce("fused", "Tracks are fused — every shooter's working off one picture now.", { accent: true });
         this.sayOnce("samegear", "Same units. Now they're one system. Feel the difference.");
       }
@@ -436,6 +478,15 @@ export class Game {
       if (s.act === "arcade") s.currency += s.activeWave.stipend;
       s.score += s.activeWave.stipend * 0.4;
       s.wavesSurvived++;
+      // Drill verdict: name what just happened so the lesson lands.
+      if (s.activeWave.drill) {
+        const leaked = s.leaked - this.drillLeaksAtStart;
+        if (leaked > 0) {
+          this.operator.say(`${leaked} got through. Not a hardware problem — a coordination problem. Nobody was watching those lanes.`);
+        } else {
+          this.operator.say("Clean. Nothing through — same six devices, one shared picture. That's the whole pitch.", { accent: true });
+        }
+      }
     }
     s.scheduleIndex++;
     this.enterBuild();
@@ -714,7 +765,7 @@ export class Game {
     // Scripted Act 1: a tap deploys the next guided device at its FIXED hex
     // (location is pre-scripted — the laydown can't change). Otherwise locked.
     if (s.act === "ops") {
-      if (!this.act1Deployed && this.deployGuided < Game.DEPLOY_GUIDED) this.deployNext();
+      if (!this.act1Deployed && this.deployQueue.length > 0) this.deployNext();
       return;
     }
     const hex = _hex;

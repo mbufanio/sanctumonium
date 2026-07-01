@@ -1,10 +1,12 @@
 /**
- * Balance & pacing analysis harness (not a guardrail — a measurement tool).
+ * Balance & pacing analysis harness (measurement tool + a few guardrails).
  *
- * Plays out COMPLETE runs headlessly under several strategies across many
- * seeds and prints a report: win rates, score, leaks, and wall-clock pacing.
- * Used to tune the economy/wave constants. The guardrails it informs live in
- * balance.test.ts.
+ * The value-prop demo (Act 1) is now fully scripted, so the place where layout
+ * strategy and pacing actually vary is the ENDLESS ARCADE act. This harness
+ * plays out arcade survival headlessly under several build strategies across
+ * many seeds and prints a report, then asserts the lesson still holds: a
+ * balanced, coordinated grid survives the escalation deeper than brute-force or
+ * sensor-less spreads, and doing nothing dies almost immediately.
  *
  * Run:  npx vitest run balance.harness --reporter=basic
  */
@@ -16,18 +18,12 @@ import { makePlaced } from "../state.ts";
 import { placeableById, TRACKED_KILL_BONUS } from "./catalog.ts";
 import { createRealtimeState, type PlacedDevice } from "./types.ts";
 import { stepWave } from "./engine.ts";
-import { bossConfigFromLayout } from "./schedule.ts";
+import { makeArcadeWave } from "./schedule.ts";
 import { adaptWave } from "./adaptive.ts";
 
-const SCHEDULE = LEVEL_1.schedule;
-import { computeOptimal, emptyAssignment } from "../boss/engine.ts";
-import { resolveEncounter } from "../boss/engine.ts";
-import type { AssignmentMap, BossConfig } from "../boss/types.ts";
-
 const SPAWN_RADIUS = LEVEL_1.rings * HEX_SIZE * Math.sqrt(3) + HEX_SIZE * 1.5;
-// Estimated player dwell that the sim can't measure, for run-length pacing.
-const BUILD_DWELL_S = 9;
-const BOSS_DWELL_S = 22;
+/** Hard cap on arcade waves per run (escalation overwhelms any grid well before). */
+const MAX_WAVE = 60;
 
 interface PlacePlan {
   hex: Hex;
@@ -38,8 +34,6 @@ interface Strategy {
   name: string;
   /** Ordered wishlist of placements; we buy down the list as funds allow. */
   plan: PlacePlan[];
-  /** Boss assignment policy. */
-  boss: "optimal" | "naive";
 }
 
 /** Occupancy-safe ring bearing → hex (pick the n-th cell of a ring). */
@@ -48,9 +42,8 @@ function ringCell(radius: number, idx: number): Hex {
   return ring[((idx % ring.length) + ring.length) % ring.length];
 }
 
-/** A balanced, coordinated wishlist: effectors and sensors on overlapping rings
- *  (sensors track the rings the effectors sit on), bought INTERLEAVED 2:1 so the
- *  economy stays healthy from the first build phase — as a real player builds. */
+/** A balanced, coordinated wishlist: effectors and sensors on overlapping rings,
+ *  bought INTERLEAVED 2:1 so the economy stays healthy as a real player builds. */
 function coordinatedPlan(): PlacePlan[] {
   const eff: PlacePlan[] = [...hexRing(2), ...hexRing(4)].map((hex) => ({ hex, placeableId: "net-drone" }));
   const sen: PlacePlan[] = [...hexRing(3), ...hexRing(5)].map((hex, i) => ({ hex, placeableId: i % 2 === 0 ? "radar" : "rf-df" }));
@@ -83,99 +76,65 @@ function effectorsOnlyPlan(): PlacePlan[] {
 }
 
 const STRATEGIES: Strategy[] = [
-  { name: "no-build", plan: [], boss: "naive" },
-  { name: "coordinated", plan: coordinatedPlan(), boss: "optimal" },
-  { name: "brute-force", plan: brutePlan(), boss: "naive" },
-  { name: "effectors-only", plan: effectorsOnlyPlan(), boss: "naive" },
+  { name: "no-build", plan: [] },
+  { name: "coordinated", plan: coordinatedPlan() },
+  { name: "brute-force", plan: brutePlan() },
+  { name: "effectors-only", plan: effectorsOnlyPlan() },
 ];
 
-function naiveAssign(cfg: BossConfig): AssignmentMap {
-  const map = emptyAssignment(cfg);
-  const sensors = [...cfg.sensors];
-  const effectors = [...cfg.effectors];
-  cfg.threats.forEach((t) => {
-    map[t.id] = { sensorId: sensors.shift()?.id ?? null, effectorId: effectors.shift()?.id ?? null };
-  });
-  return map;
-}
-
 interface RunResult {
-  won: boolean;
   score: number;
   integrity: number;
   kills: number;
   leaks: number;
   spent: number;
   devices: number;
-  waveSeconds: number;
-  runMinutes: number;
   wavesSurvived: number;
 }
 
+/** Play an arcade survival run for one strategy: build between waves as funds
+ *  allow, then fight escalating arcade waves (coordinated — the arcade is the
+ *  post-Boss-#2 act) until the grid is overwhelmed. */
 function simulateRun(strat: Strategy, seed: number): RunResult {
   const rng = new Rng(seed);
-  let currency = 120;
+  let currency = 450; // the arcade prep budget (mirrors ARCADE_PREP_BUDGET)
   let integrity = 100;
   let score = 0;
   let kills = 0;
   let leaks = 0;
   let spent = 0;
-  let waveSeconds = 0;
-  let buildPhases = 0;
-  let bossPhases = 0;
-  let brainUnlocked = false; // unlocks after boss #1, like the real run
   let wavesSurvived = 0;
 
   const placed: PlacedDevice[] = [makePlaced("radar", { q: 0, r: -1 }), makePlaced("net-drone", { q: 0, r: 1 })];
   const occupied = new Set(placed.map((d) => `${d.hex.q},${d.hex.r}`));
-  let planCursor = 0;
 
-  const doBuild = () => {
-    buildPhases++;
-    // Buy down the wishlist while affordable, keeping a small reserve.
-    while (planCursor < strat.plan.length) {
-      const item = strat.plan[planCursor];
-      const key = `${item.hex.q},${item.hex.r}`;
-      if (occupied.has(key)) { planCursor++; continue; }
-      const p = placeableById(item.placeableId)!;
-      if (currency < p.cost) break;
-      currency -= p.cost;
-      spent += p.cost;
-      placed.push(makePlaced(item.placeableId, item.hex));
-      occupied.add(key);
-      planCursor++;
-    }
-  };
+  // Field the strategy's FULL intended grid up front (arcade prep). We're
+  // measuring LAYOUT quality under coordination, so we don't gate on the budget
+  // here — `spent` is tracked only for the report.
+  for (const item of strat.plan) {
+    const key = `${item.hex.q},${item.hex.r}`;
+    if (occupied.has(key)) continue;
+    const p = placeableById(item.placeableId)!;
+    spent += p.cost;
+    placed.push(makePlaced(item.placeableId, item.hex));
+    occupied.add(key);
+  }
+  void currency;
 
-  for (const entry of SCHEDULE) {
-    doBuild();
-    if (entry.type === "wave") {
-      const rt = createRealtimeState();
-      // Adaptive enemy probes this layout's seams; brain coordinates post-unlock.
-      const wave = adaptWave(entry.wave, placed, SPAWN_RADIUS, rng);
-      let t = 0;
-      for (let i = 0; i < 6000 && integrity > 0; i++) {
-        const res = stepWave(rt, placed, wave, 1 / 60, rng, { spawnRadius: SPAWN_RADIUS, coordinated: brainUnlocked });
-        for (const k of res.kills) { currency += k.bounty; score += k.bounty * (k.tracked ? TRACKED_KILL_BONUS : 1); kills++; }
-        for (const l of res.leaks) { integrity -= l.damage; leaks++; }
-        t += 1 / 60;
-        if (res.waveComplete) break;
-      }
-      waveSeconds += t;
-      if (integrity > 0) { currency += entry.wave.stipend; score += entry.wave.stipend * 0.4; wavesSurvived++; }
-    } else {
-      bossPhases++;
-      const cfg = bossConfigFromLayout(placed, entry.bossIndex);
-      const map = strat.boss === "optimal" ? computeOptimal(cfg) : naiveAssign(cfg);
-      const res = resolveEncounter(cfg, map, rng);
-      score += res.stopped * 120;
-      if (entry.bossIndex === 1) brainUnlocked = true;
+  for (let n = 1; n <= MAX_WAVE && integrity > 0; n++) {
+    for (const d of placed) { d.cooldown = 0; d.ammo = d.magazine; d.reloadCd = 0; }
+    const rt = createRealtimeState();
+    const wave = adaptWave(makeArcadeWave(n), placed, SPAWN_RADIUS, rng);
+    for (let i = 0; i < 6000 && integrity > 0; i++) {
+      const res = stepWave(rt, placed, wave, 1 / 60, rng, { spawnRadius: SPAWN_RADIUS, coordinated: true });
+      for (const k of res.kills) { currency += k.bounty; score += k.bounty * (k.tracked ? TRACKED_KILL_BONUS : 1); kills++; }
+      for (const l of res.leaks) { integrity -= l.damage; leaks++; }
+      if (res.waveComplete) break;
     }
-    if (integrity <= 0) break;
+    if (integrity > 0) wavesSurvived++;
   }
 
-  const runMinutes = (waveSeconds + buildPhases * BUILD_DWELL_S + bossPhases * BOSS_DWELL_S) / 60;
-  return { won: integrity > 0, score, integrity, kills, leaks, spent, devices: placed.length, waveSeconds, runMinutes, wavesSurvived };
+  return { score, integrity, kills, leaks, spent, devices: placed.length, wavesSurvived };
 }
 
 function avg(ns: number[]): number {
@@ -183,61 +142,49 @@ function avg(ns: number[]): number {
 }
 
 interface Agg {
-  winPct: number;
   score: number;
   leaks: number;
-  runMinutes: number;
   wavesSurvived: number;
 }
 
-describe("BALANCE & PACING ANALYSIS", () => {
-  // Keep this modest — the separations between strategies are large, so a small
-  // sample asserts them reliably while keeping the default test run fast.
+describe("BALANCE & PACING ANALYSIS (arcade survival)", () => {
   const SEEDS = 12;
   const agg: Record<string, Agg> = {};
-  const rows: string[] = ["strategy        win%  score   integ  kills  leaks  devices  spent  wave_s  run_min"];
+  const rows: string[] = ["strategy        score   integ  kills  leaks  devices  spent  waves"];
   for (const strat of STRATEGIES) {
     const rs: RunResult[] = [];
     for (let seed = 1; seed <= SEEDS; seed++) rs.push(simulateRun(strat, seed));
-    const winPct = (100 * rs.filter((r) => r.won).length) / SEEDS;
-    agg[strat.name] = { winPct, score: avg(rs.map((r) => r.score)), leaks: avg(rs.map((r) => r.leaks)), runMinutes: avg(rs.map((r) => r.runMinutes)), wavesSurvived: avg(rs.map((r) => r.wavesSurvived)) };
+    agg[strat.name] = {
+      score: avg(rs.map((r) => r.score)),
+      leaks: avg(rs.map((r) => r.leaks)),
+      wavesSurvived: avg(rs.map((r) => r.wavesSurvived)),
+    };
     rows.push(
       [
         strat.name.padEnd(15),
-        winPct.toFixed(0).padStart(4),
         agg[strat.name].score.toFixed(0).padStart(6),
         avg(rs.map((r) => r.integrity)).toFixed(0).padStart(6),
         avg(rs.map((r) => r.kills)).toFixed(0).padStart(6),
         agg[strat.name].leaks.toFixed(0).padStart(6),
         avg(rs.map((r) => r.devices)).toFixed(0).padStart(8),
         avg(rs.map((r) => r.spent)).toFixed(0).padStart(6),
-        avg(rs.map((r) => r.waveSeconds)).toFixed(0).padStart(7),
-        agg[strat.name].runMinutes.toFixed(1).padStart(8),
+        agg[strat.name].wavesSurvived.toFixed(1).padStart(6),
       ].join(" "),
     );
   }
   // eslint-disable-next-line no-console
   console.log("\n" + rows.join("\n") + "\n");
 
-  // ---- guardrails (spec §8: coordination must clearly beat the rest) ------
+  // ---- guardrails: coordination must clearly beat the rest (spec §8) --------
 
-  it("doing nothing loses", () => {
-    expect(agg["no-build"].winPct).toBe(0);
+  it("doing nothing is overwhelmed almost immediately", () => {
+    expect(agg["no-build"].wavesSurvived).toBeLessThan(3);
   });
 
-  it("clustered brute-force coverage loses (seams get exploited)", () => {
-    expect(agg["brute-force"].winPct).toBe(0);
-  });
-
-  it("a coordinated layout survives deep into the escalation finale", () => {
-    // The finale is meant to overwhelm (spec §7). With magazine discipline now
-    // in play (weapons reload), sustained defense is harder — coordinated still
-    // wins the majority and dominates every alternative, which is the point.
-    expect(agg["coordinated"].winPct).toBeGreaterThanOrEqual(50);
-  });
-
-  it("coordinated play survives noticeably deeper than sensor-less spread", () => {
+  it("a coordinated grid survives the escalation deeper than any alternative", () => {
     expect(agg["coordinated"].wavesSurvived).toBeGreaterThan(agg["effectors-only"].wavesSurvived + 1);
+    expect(agg["coordinated"].wavesSurvived).toBeGreaterThan(agg["brute-force"].wavesSurvived + 1);
+    expect(agg["coordinated"].wavesSurvived).toBeGreaterThan(agg["no-build"].wavesSurvived + 2);
   });
 
   it("coordination scores clearly higher than every alternative (the leaderboard rewards the lesson)", () => {
@@ -246,15 +193,8 @@ describe("BALANCE & PACING ANALYSIS", () => {
     expect(agg["coordinated"].score).toBeGreaterThan(agg["no-build"].score * 1.2);
   });
 
-  it("coordination leaks the least", () => {
-    expect(agg["coordinated"].leaks).toBeLessThan(agg["effectors-only"].leaks);
-    expect(agg["coordinated"].leaks).toBeLessThan(agg["brute-force"].leaks);
-  });
-
-  it("a maximal full run lands in the pacing band (typical runs end sooner)", () => {
-    // This is the upper bound — a maximal coordinated player clearing every wave.
-    // Cold players get overwhelmed earlier in the finale, finishing well under.
-    expect(agg["coordinated"].runMinutes).toBeGreaterThan(3);
-    expect(agg["coordinated"].runMinutes).toBeLessThan(7);
+  it("the arcade always ends — even a maximal grid is eventually overwhelmed", () => {
+    // The whole point of the endless act: nobody survives forever (spec §7).
+    expect(agg["coordinated"].wavesSurvived).toBeLessThan(MAX_WAVE);
   });
 });

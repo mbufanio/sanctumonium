@@ -15,11 +15,9 @@ import type { GameState } from "../sim/state.ts";
 
 export interface ScriptedDockOpts {
   kind: "deploy" | "locked";
-  deployReady?: boolean;
   placed?: number;
   total?: number;
   startLabel: string;
-  onDeployRest?(): void;
   onStart(): void;
 }
 
@@ -214,14 +212,8 @@ export class Hud {
       const panel = el("div", "deploy-panel");
       panel.innerHTML = `
         <div class="deploy-head"><span class="brain-dot">◈</span> STAND UP THE GRID</div>
-        <div class="deploy-sub">Tap the lit hex to place each device — this is your fixed laydown.</div>
-        <div class="deploy-prog"><span class="deploy-count">${placed}</span> / ${total} deployed</div>
+        <div class="deploy-prog"><span class="deploy-count">${placed}</span> / ${total} placed</div>
       `;
-      const rest = el("button", "btn-deploy-rest" + (opts.deployReady ? "" : " poor")) as HTMLButtonElement;
-      rest.disabled = !opts.deployReady;
-      rest.innerHTML = `<span>Deploy the rest ▸</span>`;
-      rest.onclick = () => opts.onDeployRest?.();
-      panel.append(rest);
       dock.append(panel);
     } else {
       const hint = el("div", "build-hint locked");

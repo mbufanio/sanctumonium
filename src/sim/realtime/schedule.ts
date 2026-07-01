@@ -86,6 +86,32 @@ export function makeArcadeWave(n: number): WaveDef {
   return { index: 1000 + n, kind: "normal", label: `WAVE ${n}`, spawns, stipend: 0 };
 }
 
+/**
+ * Build an Act-1 coordination DRILL: a small, hand-authored, slow-motion scenario
+ * whose whole job is to make one coordination failure legible. Drones arrive on
+ * fixed bearings (no adaptive layer, no randomness) so the SAME scenario can be
+ * replayed uncoordinated (it leaks) and coordinated (it holds). `spawns` are
+ * given as [at, typeId, bearing] tuples.
+ */
+export function makeDrill(
+  index: number,
+  label: string,
+  spawns: Array<[number, ThreatTypeId, number]>,
+  spawnRadius?: number,
+  timeScale = 0.5,
+): WaveDef {
+  return {
+    index,
+    kind: "normal",
+    label,
+    spawns: spawns.map(([at, typeId, bearing]) => ({ at, typeId, bearing })),
+    stipend: 0,
+    drill: true,
+    timeScale,
+    spawnRadius,
+  };
+}
+
 /** One schedule entry: a real-time wave or a boss fight on the built layout. */
 export type ScheduleEntry =
   | { type: "wave"; wave: WaveDef }

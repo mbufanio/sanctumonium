@@ -7,7 +7,12 @@
  * for a level) used to reject junk. No I/O, no rendering.
  */
 import { getLevel } from "../sim/level.ts";
+import { makeArcadeWave } from "../sim/realtime/schedule.ts";
 import { DRONE_SPECS, TRACKED_KILL_BONUS } from "../sim/realtime/catalog.ts";
+
+/** Deepest arcade wave any real run could reach — the cap's endless-mode budget.
+ *  Escalation overwhelms even a god-tier grid well before this (headroom margin). */
+const MAX_ARCADE_WAVE = 90;
 
 export type BoardKind = "alltime" | "today";
 
@@ -105,6 +110,13 @@ export function maxPlausibleScore(levelId: string): number {
       max += 4 * 120; // a perfect 4/4 boss
     }
   }
+  // The endless arcade act (post-Boss-#2) is where the score really accrues —
+  // add the bounty of every drone across the deepest reachable arcade wave.
+  for (let n = 1; n <= MAX_ARCADE_WAVE; n++) {
+    for (const s of makeArcadeWave(n).spawns) {
+      max += DRONE_SPECS[s.typeId].bounty * (s.mods?.bountyMul ?? 1) * TRACKED_KILL_BONUS;
+    }
+  }
   return Math.ceil(max * 1.08); // small margin for rounding
 }
 
@@ -127,7 +139,10 @@ export function validateSubmission(sub: Submission): ValidationResult {
   const score = Math.floor(stats.score);
   if (score < 0) return { ok: false, reason: "negative score" };
   if (score > maxPlausibleScore(levelId)) return { ok: false, reason: "implausible score" };
-  if (typeof stats.wavesSurvived !== "number" || stats.wavesSurvived < 0 || stats.wavesSurvived > level.schedule.length) {
+  // Waves = the fixed Act-1 schedule PLUS however many endless arcade waves the
+  // player cleared before being overwhelmed (bounded generously for anti-abuse).
+  const maxWaves = level.schedule.length + MAX_ARCADE_WAVE;
+  if (typeof stats.wavesSurvived !== "number" || stats.wavesSurvived < 0 || stats.wavesSurvived > maxWaves) {
     return { ok: false, reason: "bad waves" };
   }
   return {

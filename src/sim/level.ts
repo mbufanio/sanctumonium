@@ -8,9 +8,10 @@
  * (a swarm is fast/cheap/small RF quads; jammer-immune pressure is autonomy-
  * heavy) plus a couple of level flags — no new threat types required.
  */
-import { hexRing, type Hex } from "./hex.ts";
-import { makeWave, type ScheduleEntry } from "./realtime/schedule.ts";
+import { HEX_SIZE, hexRing, type Hex } from "./hex.ts";
+import { makeDrill, type ScheduleEntry } from "./realtime/schedule.ts";
 import { cells, hexCluster, hexLine, type TerrainCell } from "./terrain.ts";
+import type { ThreatTypeId } from "./boss/types.ts";
 
 export interface AssetDef {
   id: string;
@@ -51,6 +52,46 @@ export interface LevelDef {
 const BOSS_1: ScheduleEntry = { type: "boss", bossIndex: 1 };
 const BOSS_2: ScheduleEntry = { type: "boss", bossIndex: 2 };
 
+// ---- Act-1 coordination drills (the value-prop demo) ---------------------
+// Two hand-authored scenarios, each played TWICE: once before Boss #1 (no
+// coordination) and again after (coordinated). Identical spawns each time, so
+// "same threats — the brain is the difference" is literally true. Drills are
+// level-agnostic (the lesson is universal); per-site flavour lives in terrain,
+// laydown and the endless arcade act.
+//
+// Each scenario is a spread of drones arriving together from all around the
+// ring. UNCOORDINATED, the grid has no fused picture, so every sensor slaves to
+// the single loudest return — one drone is tracked and engaged while the rest
+// fly their whole approach in a blind spot and leak. COORDINATED, the manager
+// hands each drone its own sensor, so every shooter engages its local threat and
+// nothing gets through. Same six devices. (Tuned headlessly: coord clears with
+// zero leaks; uncoord leaks roughly half.)
+const DRILL_RADIUS = 3.6 * HEX_SIZE * Math.sqrt(3); // just outside the ring-3 sensors
+
+/** A spread burst of `n` RF quads arriving together across `arc` degrees. */
+function spreadBurst(n: number, arc = 320): Array<[number, ThreatTypeId, number]> {
+  const out: Array<[number, ThreatTypeId, number]> = [];
+  for (let i = 0; i < n; i++) {
+    const bearing = Math.round((((arc / (n - 1)) * i - arc / 2) + 360) % 360);
+    out.push([0.5 + i * 0.04, "rf-quad", bearing]);
+  }
+  return out;
+}
+
+const DRILL_A = spreadBurst(6); // the intro drill
+const DRILL_B = spreadBurst(8); // the bigger one
+
+function act1DrillSchedule(): ScheduleEntry[] {
+  return [
+    { type: "wave", wave: makeDrill(1, "DRILL 1 · NO COORDINATION", DRILL_A, DRILL_RADIUS) },
+    { type: "wave", wave: makeDrill(2, "DRILL 2 · NO COORDINATION", DRILL_B, DRILL_RADIUS) },
+    BOSS_1,
+    { type: "wave", wave: makeDrill(3, "DRILL 3 · COORDINATED", DRILL_A, DRILL_RADIUS) },
+    { type: "wave", wave: makeDrill(4, "DRILL 4 · COORDINATED", DRILL_B, DRILL_RADIUS) },
+    BOSS_2,
+  ];
+}
+
 /** Level 1 — Military facility (the lead; balanced teacher). */
 const MILITARY: LevelDef = {
   id: "mil-facility",
@@ -70,23 +111,10 @@ const MILITARY: LevelDef = {
     ...cells(hexLine({ q: -5, r: -1 }, { q: -2, r: -3 }), "nofire"),
   ],
   restrictedPlaceables: [],
-  // Scripted Act-1 arc (the value-prop demo). The FIXED laydown (act1Laydown)
-  // fights all five waves with no economy. Waves 1-2 are UNCOORDINATED and
-  // dense enough to saturate the grid — the asset bleeds to ~25% by Boss #1.
-  // After Boss #1 the brain comes online; waves 3-5 are comparably sized but
-  // coordination + repair recovers the asset to ~80% by Boss #2. Same gear the
-  // whole way — the brain is the only thing that changed. (Tuned headlessly;
-  // the controller floors ops integrity so the demo always reaches the pitch.)
-  // After Boss #2 the run crosses into the endless arcade act (no fixed waves).
-  schedule: [
-    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 24 }, { typeId: "autonomy", count: 7 }], 0, undefined, true) },
-    { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 31 }, { typeId: "autonomy", count: 10 }, { typeId: "low-observable", count: 7 }], 0, "WAVE 2 — RUSH", true) },
-    BOSS_1,
-    { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 24 }, { typeId: "autonomy", count: 7 }, { typeId: "low-observable", count: 6 }], 0, undefined, true) },
-    { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 29 }, { typeId: "autonomy", count: 8 }, { typeId: "low-observable", count: 7 }], 0, undefined, true) },
-    { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 34 }, { typeId: "autonomy", count: 10 }, { typeId: "low-observable", count: 8 }], 0, undefined, true) },
-    BOSS_2,
-  ],
+  // Act 1 is the scripted coordination demo — identical drills at every site
+  // (the lesson is universal). Per-site character lives in terrain/laydown and
+  // the endless arcade act after Boss #2.
+  schedule: act1DrillSchedule(),
 };
 
 /** Level 2 — Airport. Operational-shutdown angle: every leak disrupts ops. */
@@ -107,18 +135,7 @@ const AIRPORT: LevelDef = {
     ...cells(hexLine({ q: -8, r: 2 }, { q: 8, r: -6 }), "nofire"),
   ],
   restrictedPlaceables: [],
-  schedule: [
-    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 5 }], 70) },
-    { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 5 }, { typeId: "low-observable", count: 2 }], 90) },
-    BOSS_1,
-    { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 6 }, { typeId: "low-observable", count: 3 }], 105) },
-    { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 6 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 2 }], 120) },
-    { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 7 }, { typeId: "autonomy", count: 3 }, { typeId: "low-observable", count: 3 }], 140) },
-    BOSS_2,
-    { type: "wave", wave: makeWave(6, [{ typeId: "rf-quad", count: 9 }, { typeId: "autonomy", count: 4 }, { typeId: "low-observable", count: 4 }], 160) },
-    { type: "wave", wave: makeWave(7, [{ typeId: "rf-quad", count: 11 }, { typeId: "autonomy", count: 5 }, { typeId: "low-observable", count: 5 }], 200) },
-    { type: "wave", wave: makeWave(8, [{ typeId: "rf-quad", count: 16 }, { typeId: "autonomy", count: 8 }, { typeId: "low-observable", count: 8 }], 280, "FINAL WAVE") },
-  ],
+  schedule: act1DrillSchedule(),
 };
 
 /** Level 3 — Energy facility. High-value, fragile asset; jammer-immune pressure. */
@@ -136,24 +153,10 @@ const ENERGY: LevelDef = {
   // Flat, open ground — the cleanest site, and the booth's opener.
   terrain: [],
   restrictedPlaceables: [],
-  schedule: [
-    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 4 }], 70) },
-    { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 4 }, { typeId: "autonomy", count: 2 }], 90) },
-    BOSS_1,
-    { type: "wave", wave: makeWave(3, [{ typeId: "autonomy", count: 5 }, { typeId: "low-observable", count: 2 }], 110) },
-    { type: "wave", wave: makeWave(4, [{ typeId: "autonomy", count: 6 }, { typeId: "rf-quad", count: 3 }], 130) },
-    { type: "wave", wave: makeWave(5, [{ typeId: "autonomy", count: 7 }, { typeId: "low-observable", count: 3 }], 150) },
-    BOSS_2,
-    { type: "wave", wave: makeWave(6, [{ typeId: "autonomy", count: 8 }, { typeId: "low-observable", count: 3 }, { typeId: "rf-quad", count: 4 }], 180) },
-    { type: "wave", wave: makeWave(7, [{ typeId: "autonomy", count: 10 }, { typeId: "low-observable", count: 5 }, { typeId: "rf-quad", count: 5 }], 220) },
-    { type: "wave", wave: makeWave(8, [{ typeId: "autonomy", count: 12 }, { typeId: "low-observable", count: 5 }, { typeId: "rf-quad", count: 7 }], 320, "FINAL WAVE") },
-  ],
+  schedule: act1DrillSchedule(),
 };
 
-/** Swarm modifier — fast, cheap, small commercial drones in big numbers. */
-const SWARM = { speedMul: 1.5, bountyMul: 0.45, leakMul: 0.55, size: 0.6 } as const;
-
-/** Level 4 — Stadium. Dense, crowd-protection; the SWARM wrinkle. */
+/** Level 4 — Stadium. Dense, crowd-protection; the SWARM wrinkle (arcade act). */
 const STADIUM: LevelDef = {
   id: "stadium",
   name: "Stadium · Event Day",
@@ -174,18 +177,7 @@ const STADIUM: LevelDef = {
     ...cells(hexCluster({ q: -6, r: 2 }, 1), "blocker"),
   ],
   restrictedPlaceables: ["laser"],
-  schedule: [
-    { type: "wave", wave: makeWave(1, [{ typeId: "rf-quad", count: 8, mods: SWARM }], 70) },
-    { type: "wave", wave: makeWave(2, [{ typeId: "rf-quad", count: 12, mods: SWARM }], 95) },
-    BOSS_1,
-    { type: "wave", wave: makeWave(3, [{ typeId: "rf-quad", count: 14, mods: SWARM }, { typeId: "low-observable", count: 2 }], 115) },
-    { type: "wave", wave: makeWave(4, [{ typeId: "rf-quad", count: 16, mods: SWARM }, { typeId: "autonomy", count: 2 }], 135) },
-    { type: "wave", wave: makeWave(5, [{ typeId: "rf-quad", count: 20, mods: SWARM }, { typeId: "autonomy", count: 3 }], 160) },
-    BOSS_2,
-    { type: "wave", wave: makeWave(6, [{ typeId: "rf-quad", count: 26, mods: SWARM }, { typeId: "autonomy", count: 4 }], 190) },
-    { type: "wave", wave: makeWave(7, [{ typeId: "rf-quad", count: 34, mods: SWARM }, { typeId: "autonomy", count: 6 }], 230) },
-    { type: "wave", wave: makeWave(8, [{ typeId: "rf-quad", count: 50, mods: SWARM }, { typeId: "autonomy", count: 10 }, { typeId: "low-observable", count: 6 }], 340, "FINAL WAVE") },
-  ],
+  schedule: act1DrillSchedule(),
 };
 
 // Energy leads: flat open ground is the cleanest place to learn placement, so
@@ -218,13 +210,14 @@ export function act1Laydown(level: LevelDef): LaydownItem[] {
   const sensorRing = hexRing(3); // 18 cells
   const effRing = hexRing(2); // 12 cells
   const out: LaydownItem[] = [];
-  const sensors: Array<[number, string]> = [
-    [0, "radar"], [5, "rf-df"], [9, "radar"], [13, "radar"],
-  ];
+  // A deliberately SMALL, legible grid (6 devices) so the coordination drills
+  // read clearly: two radars whose coverage overlaps (they can end up tracking
+  // the SAME drone) plus an RF-DF; two net-drones that can both reach a central
+  // target (they can DOGPILE) plus a jammer. Placement order interleaves sensors
+  // and effectors so the guided deploy teaches "eyes then shooters".
+  const sensors: Array<[number, string]> = [[0, "radar"], [6, "radar"], [12, "rf-df"]];
   for (const [idx, id] of sensors) out.push({ placeableId: id, hex: sensorRing[idx % sensorRing.length] });
-  const effectors: Array<[number, string]> = [
-    [0, "net-drone"], [2, "rf-jammer"], [4, "net-drone"], [6, "net-drone"], [8, "rf-jammer"], [10, "net-drone"],
-  ];
+  const effectors: Array<[number, string]> = [[0, "net-drone"], [4, "net-drone"], [8, "rf-jammer"]];
   for (const [idx, id] of effectors) {
     if (level.restrictedPlaceables.includes(id)) continue;
     out.push({ placeableId: id, hex: effRing[idx % effRing.length] });

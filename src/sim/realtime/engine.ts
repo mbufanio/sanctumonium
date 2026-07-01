@@ -50,6 +50,17 @@ export interface StepEnv {
    * the most dangerous tracked threats. Same hardware, better used.
    */
   coordinated?: boolean;
+  /**
+   * Act-1 drill mode: sensors run a FINITE track capacity (default 1) and are
+   * assigned to drones each step. Uncoordinated, each sensor locks its own most
+   * central target with no cross-awareness — so two can pile onto one drone and
+   * leave another an untracked seam. Coordinated, a manager spreads them to
+   * cover distinct drones. Also emits track / dogpile / seam callout fx. OFF for
+   * normal + arcade waves, which keep the original unlimited-tracking model.
+   */
+  trackLimited?: boolean;
+  /** Simultaneous tracks each sensor can hold in drill mode (default 1). */
+  trackCapacity?: number;
 }
 
 export interface KillInfo {
@@ -110,31 +121,55 @@ export function stepWave(
   //    body). WITH the brain, every capable sensor's read is FUSED — IDs land
   //    fast. WITHOUT it, each effector leans on the single best sensor, so the
   //    picture is slower and patchier.
+  // 2a. Move drones and gather each one's DETECTION and its capable sensors (in
+  //     range, LOS-clear, can classify the type). Detection is any return.
+  const capableOf = new Map<number, { s: PlacedDevice; q: number }[]>();
   for (const d of rt.drones) {
     if (d.state !== "alive") continue;
     const len = planeLen(d.pos) || 1;
     d.pos = { x: d.pos.x - (d.pos.x / len) * d.speed * dt, y: d.pos.y - (d.pos.y / len) * d.speed * dt };
 
     let detected = false;
-    let fused = 0; // sum of capable sensors (coordinated)
-    let best = 0; // best single capable sensor (uncoordinated)
+    const caps: { s: PlacedDevice; q: number }[] = [];
     for (const s of sensors) {
       if (planeDist(s.pos, d.pos) > s.radius) continue;
       if (!losClear(s.pos, d.pos, terrain, false)) continue;
       detected = true; // a return, even if the sensor can't classify the type
       const q = s.track[d.typeId];
-      if (q > 0) {
-        fused += q;
-        if (q > best) best = q;
-      }
+      if (q > 0) caps.push({ s, q });
     }
+    d.detected = detected;
     if (detected && d.detectedAt < 0) d.detectedAt = rt.time; // first return
+    capableOf.set(d.id, caps);
+  }
+
+  // 2b. ASSIGN sensors to drones. Unlimited (normal/arcade): every capable sensor
+  //     works every drone it can — the original model. Drill mode: finite track
+  //     capacity, so assignment is where coordination bites. Uncoordinated, each
+  //     sensor independently grabs its most central capable target(s) — several
+  //     can converge on one drone and leave others unwatched. Coordinated, a
+  //     manager hands each drone (most-dangerous first) a distinct free sensor.
+  const assigned = assignSensors(rt, sensors, capableOf, env);
+
+  // 2c. Classify from the ASSIGNED sensors and resolve leaks.
+  for (const d of rt.drones) {
+    if (d.state !== "alive") continue;
+    const asg = assigned.get(d.id) ?? [];
+    d.trackerIds = asg.map((c) => c.s.id);
+    let fused = 0;
+    let best = 0;
+    for (const c of asg) {
+      fused += c.q;
+      if (c.q > best) best = c.q;
+    }
     const classRate = env.coordinated ? fused : best;
     if (classRate > 0) d.idConf = Math.min(1, d.idConf + classRate * ID_GAIN * dt);
-    else if (!detected) d.idConf = Math.max(0, d.idConf - ID_DECAY * dt);
-    d.detected = detected;
+    else if (!d.detected) d.idConf = Math.max(0, d.idConf - ID_DECAY * dt);
     const wasTracked = d.tracked;
-    d.tracked = detected && d.idConf >= ID_THRESHOLD;
+    // Drill mode gates tracking on an assigned sensor (a seam has none); the
+    // original waves keep the detected-based rule so their behaviour is intact.
+    const covered = env.trackLimited ? d.trackerIds.length > 0 : d.detected;
+    d.tracked = covered && d.idConf >= ID_THRESHOLD;
     if (d.tracked && !wasTracked && d.detectedAt >= 0) idTimes.push(rt.time - d.detectedAt);
 
     if (planeLen(d.pos) <= LEAK_RADIUS) {
@@ -142,6 +177,8 @@ export function stepWave(
       rt.leaked++;
       leaks.push({ typeId: d.typeId, damage: d.leakDamage, pos: d.pos });
       rt.fx.push({ kind: "leak", at: d.pos, damage: d.leakDamage });
+      // A drone that got through UNTRACKED is the seam nobody was watching.
+      if (env.trackLimited && !d.tracked) rt.fx.push({ kind: "seam", at: d.pos });
     }
   }
 
@@ -154,6 +191,9 @@ export function stepWave(
   //    WITH the brain (env.coordinated), fire is DECONFLICTED: a drone already
   //    claimed this step is skipped, so the same hardware kills more per volley.
   const claimed = env.coordinated ? new Set<number>() : null;
+  // Drill callout: tally shots-per-drone this step so we can flag dogpiles
+  // (2+ effectors on one drone — the uncoordinated waste the deconflict fixes).
+  const firesOn = env.trackLimited ? new Map<number, { n: number; pos: Px }>() : null;
   const resolveHit = (e: PlacedDevice, d: Drone): boolean => {
     let p = hitChance(e.effect[d.typeId], d.tracked);
     if (env.coordinated && p > 0) p = Math.min(0.98, p * COORD_ACCURACY);
@@ -192,9 +232,15 @@ export function stepWave(
       e.reloadCd = e.reloadTime; // dry — begin reload
       continue;
     }
-    const target = pickTarget(rt.drones, e, claimed, terrain, !!env.coordinated);
+    const target = pickTarget(rt.drones, e, claimed, terrain, !!env.coordinated, !!env.trackLimited);
     if (!target) continue;
     if (claimed) claimed.add(target.id);
+    if (firesOn) {
+      const cur = firesOn.get(target.id) ?? { n: 0, pos: target.pos };
+      cur.n++;
+      cur.pos = target.pos;
+      firesOn.set(target.id, cur);
+    }
     e.cooldown = e.fireInterval;
     if (e.magazine > 0) {
       e.ammo -= 1;
@@ -235,6 +281,13 @@ export function stepWave(
     if (killedThisFire === 0) shotsWasted++;
   }
 
+  // Drill callout: flag every drone two or more effectors piled onto this step.
+  if (firesOn) {
+    for (const { n, pos } of firesOn.values()) {
+      if (n >= 2) rt.fx.push({ kind: "dogpile", at: pos });
+    }
+  }
+
   // 4. Reap resolved drones.
   rt.drones = rt.drones.filter((d) => d.state === "alive");
 
@@ -261,12 +314,14 @@ function pickTarget(
   claimed: Set<number> | null,
   terrain: TerrainMap,
   coordinated: boolean,
+  drill: boolean,
 ): Drone | null {
   let best: Drone | null = null;
   let bestScore = -Infinity;
   for (const d of drones) {
     if (d.state !== "alive") continue;
     if (claimed?.has(d.id)) continue; // coordinated: already being engaged this step
+    if (drill && !d.tracked) continue; // drills: no fire-control track, no shot — coverage decides
     if (coordinated && e.effect[d.typeId] <= 0) continue; // grid won't task a useless shot
     if (planeDist(e.pos, d.pos) > e.radius) continue;
     if (!losClear(e.pos, d.pos, terrain, true)) continue; // building or no-fire zone in the way
@@ -278,6 +333,75 @@ function pickTarget(
     }
   }
   return best;
+}
+
+/**
+ * Assign capable sensors to drones. Returns droneId → the sensors working it.
+ *
+ * UNLIMITED (normal/arcade waves): every capable sensor works every drone it can
+ * — identical to the original model.
+ *
+ * DRILL (env.trackLimited): each sensor holds at most `trackCapacity` (default 1)
+ * simultaneous tracks. This is the crux of the sensor-side lesson:
+ *   • uncoordinated — each sensor greedily locks its own most-central capable
+ *     drone(s), blind to the others, so two radars can both grab the loud target
+ *     while a second drone gets zero coverage (a seam);
+ *   • coordinated — a manager walks drones most-dangerous-first and hands each a
+ *     distinct sensor with spare capacity, covering the most drones possible.
+ */
+function assignSensors(
+  rt: RealtimeState,
+  sensors: PlacedDevice[],
+  capableOf: Map<number, { s: PlacedDevice; q: number }[]>,
+  env: StepEnv,
+): Map<number, { s: PlacedDevice; q: number }[]> {
+  const out = new Map<number, { s: PlacedDevice; q: number }[]>();
+  const alive = rt.drones.filter((d) => d.state === "alive");
+  if (!env.trackLimited) {
+    for (const d of alive) out.set(d.id, capableOf.get(d.id) ?? []);
+    return out;
+  }
+  const push = (id: number, c: { s: PlacedDevice; q: number }) => {
+    const arr = out.get(id) ?? [];
+    arr.push(c);
+    out.set(id, arr);
+  };
+  const canSee = (s: PlacedDevice, droneId: number) => (capableOf.get(droneId) ?? []).some((c) => c.s.id === s.id);
+  const byDanger = [...alive].sort((a, b) => planeLen(a.pos) - planeLen(b.pos));
+
+  if (env.coordinated) {
+    // The manager reallocates EVERY step to cover the most drones: each drone,
+    // most-dangerous first, takes its best still-free sensor. No stickiness, no
+    // redundant double-coverage — the same radars, used well.
+    const used = new Set<string>();
+    for (const d of byDanger) {
+      const free = (capableOf.get(d.id) ?? [])
+        .filter((c) => !used.has(c.s.id))
+        .sort((a, b) => b.q - a.q);
+      if (free[0]) {
+        used.add(free[0].s.id);
+        push(d.id, free[0]);
+      }
+    }
+    rt.sensorLocks = {}; // manager isn't sticky
+    return out;
+  }
+
+  // Uncoordinated: with no fused picture, every sensor slaves to the SAME
+  // loudest/most-central return — the whole grid piles its attention on one
+  // track and everything else is a blind spot until that one resolves. A lock
+  // is sticky (they hold the lead until it's gone), so a wingman flies the
+  // entire approach untracked and unengaged — the seam nobody was watching.
+  const lockedLead = rt.sensorLocks.__lead;
+  const leadStillUp = lockedLead != null && alive.some((d) => d.id === lockedLead && sensors.some((s) => canSee(s, d.id)));
+  const lead = leadStillUp ? alive.find((d) => d.id === lockedLead)! : byDanger.find((d) => sensors.some((s) => canSee(s, d.id)));
+  if (lead) {
+    rt.sensorLocks = { __lead: lead.id };
+    for (const s of sensors) if (canSee(s, lead.id)) push(lead.id, { s, q: s.track[lead.typeId] });
+  } else {
+    rt.sensorLocks = {};
+  }
+  return out;
 }
 
 /** The nearest in-range sensor that can actually track this drone (for handoff fx). */
@@ -324,6 +448,7 @@ function spawnDrone(rt: RealtimeState, s: SpawnEntry, spawnRadius: number): Dron
     idConf: 0,
     tracked: false,
     trackId: id,
+    trackerIds: [],
     size: m.size ?? 1,
   };
 }

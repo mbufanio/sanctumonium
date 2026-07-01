@@ -358,11 +358,35 @@ export class WorldRenderer {
       this.seenDrones.clear();
       return;
     }
+    // Drill callouts: draw each sensor's live track LINE to the drone it's
+    // working. Redundant coverage (2+ sensors on one drone) glows amber — the
+    // "everyone staring at one target" tell — while a drone with NO line is an
+    // unwatched seam. Only in Act-1 drills; normal waves stay clean.
+    const drill = state.phase === "wave" && !!state.activeWave?.drill;
+    const sensorPos = drill
+      ? new Map(state.placed.filter((p) => p.kind === "sensor").map((p) => [p.id, planeToPixel(p.pos)] as const))
+      : null;
+    const pulse = 0.5 + 0.5 * Math.sin(rt.time * 6);
+
     const live = new Set<number>();
     for (const d of rt.drones) {
       live.add(d.id);
       const s = planeToPixel(d.pos);
       const sz = 6 * d.size; // swarm micro-drones are smaller
+
+      if (drill && sensorPos) {
+        const wasteful = d.trackerIds.length >= 2;
+        for (const sid of d.trackerIds) {
+          const from = sensorPos.get(sid);
+          if (!from) continue;
+          const col = wasteful ? COLORS.seam : COLORS.coverage;
+          this.dronesGfx.moveTo(from.x, from.y).lineTo(s.x, s.y).stroke({ color: col, width: wasteful ? 2 : 1.2, alpha: wasteful ? 0.5 + 0.4 * pulse : 0.5 });
+        }
+        // Untracked in a drill = the seam nobody is watching: a red warning ring.
+        if (d.trackerIds.length === 0) {
+          this.dronesGfx.circle(s.x, s.y, sz + 5 + pulse * 3).stroke({ color: COLORS.bad, width: 2, alpha: 0.5 + 0.4 * pulse });
+        }
+      }
 
       // Spawn flash — a quick warm pop the first frame a drone appears, so new
       // threats announce themselves at the field edge.
@@ -488,7 +512,7 @@ export class WorldRenderer {
     const rt = state.rt;
     if (rt && rt.fx.length) {
       for (const fx of rt.fx) {
-        const ttl = fx.kind === "shot" ? 0.12 : fx.kind === "handoff" ? 0.22 : fx.kind === "aoe" ? 0.45 : fx.kind === "kill" ? 0.3 : 0.4;
+        const ttl = fx.kind === "shot" ? 0.12 : fx.kind === "handoff" ? 0.22 : fx.kind === "aoe" ? 0.45 : fx.kind === "kill" ? 0.3 : fx.kind === "seam" ? 0.9 : 0.4;
         this.activeFx.push({ fx, age: 0, ttl });
         // One-time juice as effects arrive (so bursts fire once, not per frame).
         if (fx.kind === "kill") {
@@ -544,6 +568,22 @@ export class WorldRenderer {
           .ellipse(at.x, at.y, rr, rr * ISO_SQUASH)
           .fill({ color: col, alpha: 0.12 * k })
           .stroke({ color: col, width: 2, alpha: 0.7 * k });
+      } else if (a.fx.kind === "seam") {
+        // A drill leak that got through UNTRACKED: a hard red crosshair burst —
+        // the seam nobody was watching, punched home.
+        const at = planeToPixel(a.fx.at);
+        const r = 10 + (1 - k) * 26;
+        this.fxGfx
+          .ellipse(at.x, at.y, r, r * ISO_SQUASH)
+          .stroke({ color: COLORS.bad, width: 3, alpha: k })
+          .moveTo(at.x - r, at.y).lineTo(at.x + r, at.y)
+          .moveTo(at.x, at.y - r * ISO_SQUASH).lineTo(at.x, at.y + r * ISO_SQUASH)
+          .stroke({ color: COLORS.bad, width: 1.5, alpha: 0.7 * k });
+      } else if (a.fx.kind === "dogpile") {
+        // Two+ effectors wasted on one drone: an amber "WASTED" burst ring.
+        const at = planeToPixel(a.fx.at);
+        const r = 6 + (1 - k) * 16;
+        this.fxGfx.ellipse(at.x, at.y, r, r * ISO_SQUASH).stroke({ color: COLORS.seam, width: 2, alpha: 0.8 * k });
       }
     }
     this.activeFx = survivors;
