@@ -24,6 +24,7 @@ import {
 import { placeableById, nextUpgrade, TRACKED_KILL_BONUS } from "./sim/realtime/catalog.ts";
 import { createRealtimeState } from "./sim/realtime/types.ts";
 import { stepWave } from "./sim/realtime/engine.ts";
+import { diagnoseDrill, drillFreezeReady, type DrillDiag } from "./sim/realtime/diagnose.ts";
 import { bossConfigFromLayout, makeArcadeWave, offsetWave, tierForBosses } from "./sim/realtime/schedule.ts";
 import { adaptWave, recommendPlacement, type Recommendation } from "./sim/realtime/adaptive.ts";
 import { computeOptimal, emptyAssignment, resolveEncounter } from "./sim/boss/engine.ts";
@@ -158,6 +159,7 @@ export class Game {
   private stepWavePhase(dt: number): void {
     const s = this.state;
     if (!s.rt || !s.activeWave) return;
+    if (this.drillFrozen) return; // teaching pause: the sim is held on a freeze-frame
     const coordinated = s.brainUnlocked && !s.brainStaffDisabled;
     // Act-1 drills use the SAME engine as any wave, just slowed down with the
     // teaching callouts on, so the coordination failure (pile-on / leak) is
@@ -209,6 +211,15 @@ export class Game {
       this.endRun(false);
       return;
     }
+    // Drill teaching pause: freeze the frame just before the front reaches the
+    // asset and let VEGA explain, per drone, why each one is (or isn't) stopped.
+    if (drill && this.drillFreezeArmed && !res.waveComplete) {
+      const spawnsExhausted = s.rt.spawnCursor >= s.activeWave.spawns.length;
+      if (drillFreezeReady(s.rt, coordinated, spawnsExhausted)) {
+        this.enterDrillFreeze(coordinated);
+        return;
+      }
+    }
     if (s.act === "arcade") {
       // Endless rolling escalation: the instant the current batch has finished
       // SPAWNING, the next (harder) batch is queued — so pressure never lets up
@@ -219,12 +230,102 @@ export class Game {
     }
   }
 
+  // ---- drill teaching pause (freeze-frame diagnosis) ---------------------
+
+  /** Freeze the drill and render a per-drone "why" card for the current crunch. */
+  private enterDrillFreeze(coordinated: boolean): void {
+    const s = this.state;
+    if (!s.rt) return;
+    this.drillFreezeArmed = false;
+    this.drillFrozen = true;
+    const diags = diagnoseDrill(s.rt, s.placed, coordinated, this.terrain);
+    if (diags.length === 0) { this.drillFrozen = false; return; } // nothing to teach — carry on
+    this.operator.say(
+      coordinated
+        ? "Hold it there. Same push, same six devices — look how the fused grid has already answered every one."
+        : "Freeze it. Look at what's about to get through — and exactly why the grid can't stop it.",
+      { accent: coordinated },
+    );
+    this.showDrillFreeze(diags, coordinated);
+  }
+
+  /** Resume the drill from a teaching pause; it plays out and advances itself. */
+  private resumeFromFreeze(): void {
+    this.drillFrozen = false;
+    this.hideDrillFreeze();
+  }
+
+  /** Build the freeze overlay: numbered pins on each drone + matching cards. */
+  private showDrillFreeze(diags: DrillDiag[], coordinated: boolean): void {
+    this.hideDrillFreeze();
+    const el = document.createElement("div");
+    el.id = "drill-freeze";
+    el.className = coordinated ? "coord" : "uncoord";
+
+    // On-field pins over each diagnosed drone (so a card maps to a threat).
+    const pins = document.createElement("div");
+    pins.className = "freeze-pins";
+    diags.forEach((d, i) => {
+      const s = this.state.rt?.drones.find((dr) => dr.id === d.droneId);
+      if (!s) return;
+      const p = this.world.projectToScreen(s.pos);
+      const pin = document.createElement("div");
+      pin.className = `freeze-pin tone-${d.tone}`;
+      pin.style.left = `${p.x}px`;
+      pin.style.top = `${p.y}px`;
+      pin.textContent = String(i + 1);
+      pins.append(pin);
+    });
+    el.append(pins);
+
+    const panel = document.createElement("div");
+    panel.className = "freeze-panel";
+    const heading = coordinated ? "HOLD · WHY IT HOLDS" : "HOLD · WHY THEY LEAK";
+    const lede = coordinated
+      ? "Same threats as the first pass — one fused picture, and every one is already accounted for."
+      : "Frozen just short of the asset. Each threat below, and the reason the grid isn't stopping it.";
+    panel.innerHTML = `<div class="freeze-h"><span class="freeze-tag">VEGA</span>${heading}</div><div class="freeze-lede">${lede}</div>`;
+    const list = document.createElement("div");
+    list.className = "freeze-cards";
+    diags.forEach((d, i) => {
+      const card = document.createElement("div");
+      card.className = `freeze-card tone-${d.tone}`;
+      card.innerHTML =
+        `<div class="fc-top"><span class="fc-num">${i + 1}</span>` +
+        `<span class="fc-id">${d.icon} ${d.code} · TRK ${String(d.trackId).padStart(4, "0")} · ${String(d.bearingDeg).padStart(3, "0")}°</span>` +
+        `<span class="fc-tag">${d.tag}</span></div>` +
+        `<div class="fc-detail">${d.detail}</div>`;
+      list.append(card);
+    });
+    panel.append(list);
+    const btn = document.createElement("button");
+    btn.className = "freeze-next";
+    btn.textContent = coordinated ? "Let it finish ▶" : "Play it out ▶";
+    btn.addEventListener("click", () => this.resumeFromFreeze());
+    panel.append(btn);
+    el.append(panel);
+
+    document.body.append(el);
+    this.freezeEl = el;
+    requestAnimationFrame(() => el.classList.add("show"));
+  }
+
+  private hideDrillFreeze(): void {
+    if (this.freezeEl) {
+      this.freezeEl.remove();
+      this.freezeEl = null;
+    }
+  }
+
   // ---- phase transitions -------------------------------------------------
 
   private goTitle(): void {
     this.state.phase = "title";
     this.state.boss = null;
     this.state.rt = null;
+    this.drillFrozen = false;
+    this.drillFreezeArmed = false;
+    this.hideDrillFreeze();
     this.console.clear();
     this.hud.clear();
     this.operator.reset();
@@ -251,6 +352,9 @@ export class Game {
     this.terrain = buildTerrain(level.terrain);
     this.currentBossIndex = null;
     this.said.clear();
+    this.drillFrozen = false;
+    this.drillFreezeArmed = false;
+    this.hideDrillFreeze();
     this.world.setGuide(null);
     // Scripted Act 1: the laydown is FIXED (proves the brain, not the budget).
     // Start with an empty field, no money, and queue the deploy (terrain-safe).
@@ -287,6 +391,9 @@ export class Game {
     s.phase = "build";
     s.rt = null;
     s.activeWave = null;
+    this.drillFrozen = false;
+    this.drillFreezeArmed = false;
+    this.hideDrillFreeze();
     this.console.clear();
     s.maxTier = tierForBosses(s.bossesBeaten);
     s.selectedDeviceId = null;
@@ -401,6 +508,10 @@ export class Game {
 
   /** Sim leaks at the moment a drill started (to report the drill's damage). */
   private drillLeaksAtStart = 0;
+  /** Drill teaching-pause state: armed once per drill, then spent on one freeze. */
+  private drillFreezeArmed = false;
+  private drillFrozen = false;
+  private freezeEl: HTMLElement | null = null;
 
   /** VEGA sets up a coordination drill — names the failure to watch for
    *  (uncoordinated) or the fix to watch land (coordinated). */
@@ -457,6 +568,10 @@ export class Game {
       // Ops act builds between waves only — the dock closes for the fight.
       this.hud.hideBuild();
       if (entry.wave.drill) {
+        // Arm one teaching pause for this drill (never in the attract-bot demo).
+        this.drillFreezeArmed = !this.attract;
+        this.drillFrozen = false;
+        this.hideDrillFreeze();
         this.narrateDrill(s.brainUnlocked);
       } else if (!s.brainUnlocked) {
         this.operator.setSitrep(s.level.name, "threat inbound");

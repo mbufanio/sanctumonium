@@ -160,6 +160,13 @@ export class WorldRenderer {
     return pixelToHex({ x: sx - this.world.x, y: sy - this.world.y });
   }
 
+  /** Project a plane point to a screen (CSS-pixel) point — for DOM overlays that
+   *  sit over a live entity, e.g. the drill freeze-frame pins. */
+  projectToScreen(pos: Px): Px {
+    const p = planeToPixel(pos);
+    return { x: this.world.x + p.x, y: this.world.y + p.y };
+  }
+
   setGhost(ghost: Ghost | null): void {
     this.ghost = ghost;
   }

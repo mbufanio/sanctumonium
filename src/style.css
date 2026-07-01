@@ -310,6 +310,61 @@ body {
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
 }
 
+/* Drill teaching pause — the freeze-frame "why they leak / why it holds" panel. */
+#drill-freeze { position: fixed; inset: 0; z-index: 40; pointer-events: none; opacity: 0; transition: opacity 0.22s ease; }
+#drill-freeze.show { opacity: 1; }
+#drill-freeze::before {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 42% 46%, rgba(6, 13, 21, 0) 22%, rgba(6, 13, 21, 0.55) 78%);
+}
+.freeze-pins { position: absolute; inset: 0; }
+.freeze-pin {
+  position: absolute; transform: translate(-50%, -50%); width: 24px; height: 24px;
+  border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--mono); font-weight: 800; font-size: 0.8rem; color: #06101a;
+  border: 2px solid rgba(6, 13, 21, 0.7); box-shadow: 0 0 0 2px rgba(6, 13, 21, 0.5), 0 0 14px rgba(0, 0, 0, 0.5);
+  animation: freezepin 1.2s ease-in-out infinite;
+}
+.freeze-pin.tone-bad { background: var(--bad); }
+.freeze-pin.tone-warn { background: var(--seam); }
+.freeze-pin.tone-good { background: var(--good); }
+@keyframes freezepin { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.16); } }
+.freeze-panel {
+  position: absolute; top: 50%; right: 2.2vw; transform: translateY(-50%);
+  width: min(380px, 40vw); max-height: 92vh; overflow-y: auto; pointer-events: auto;
+  background: linear-gradient(180deg, rgba(14, 26, 38, 0.97), rgba(9, 18, 26, 0.97));
+  border: 1px solid var(--panel-edge); border-radius: 14px; padding: 1.1rem 1.15rem;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+#drill-freeze.uncoord .freeze-panel { border-color: rgba(255, 84, 112, 0.5); }
+#drill-freeze.coord .freeze-panel { border-color: rgba(74, 222, 128, 0.5); }
+.freeze-h { font-family: var(--mono); letter-spacing: 0.12em; font-size: 0.9rem; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 0.5rem; }
+.freeze-tag { font-size: 0.66rem; letter-spacing: 0.18em; color: var(--brain); border: 1px solid rgba(0, 229, 255, 0.4); border-radius: 5px; padding: 0.08rem 0.34rem; }
+.freeze-lede { font-size: 0.82rem; color: var(--text-dim); line-height: 1.45; margin: 0.5rem 0 0.85rem; }
+.freeze-cards { display: flex; flex-direction: column; gap: 0.55rem; }
+.freeze-card { border: 1px solid var(--panel-edge); border-left-width: 3px; border-radius: 9px; padding: 0.55rem 0.65rem; background: rgba(255, 255, 255, 0.02); }
+.freeze-card.tone-bad { border-left-color: var(--bad); }
+.freeze-card.tone-warn { border-left-color: var(--seam); }
+.freeze-card.tone-good { border-left-color: var(--good); }
+.fc-top { display: flex; align-items: center; gap: 0.5rem; }
+.fc-num { width: 19px; height: 19px; flex: none; border-radius: 50%; display: grid; place-items: center; font-family: var(--mono); font-weight: 800; font-size: 0.72rem; color: #06101a; }
+.freeze-card.tone-bad .fc-num { background: var(--bad); }
+.freeze-card.tone-warn .fc-num { background: var(--seam); }
+.freeze-card.tone-good .fc-num { background: var(--good); }
+.fc-id { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.04em; color: var(--text-dim); }
+.fc-tag { margin-left: auto; font-family: var(--mono); font-weight: 700; font-size: 0.66rem; letter-spacing: 0.08em; }
+.freeze-card.tone-bad .fc-tag { color: var(--bad); }
+.freeze-card.tone-warn .fc-tag { color: var(--seam); }
+.freeze-card.tone-good .fc-tag { color: var(--good); }
+.fc-detail { font-size: 0.8rem; color: var(--text); line-height: 1.42; margin-top: 0.35rem; }
+.freeze-next {
+  margin-top: 1rem; width: 100%; min-height: 46px; border: none; border-radius: 10px; cursor: pointer;
+  font-family: var(--font); font-weight: 800; font-size: 0.95rem; color: #04222b;
+  background: linear-gradient(180deg, #7fe7ff, var(--friendly));
+}
+#drill-freeze.coord .freeze-next { color: #04221a; background: linear-gradient(180deg, #86efac, var(--good)); }
+.freeze-next:hover { filter: brightness(1.08); }
+
 /* Arcade overwhelm summary. */
 .arcade-stat { display: flex; gap: 2.4rem; justify-content: center; margin: 1.6rem auto; }
 .as-k { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.16em; color: var(--text-dim); }
