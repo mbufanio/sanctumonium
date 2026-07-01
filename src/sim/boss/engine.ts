@@ -14,6 +14,7 @@ import { THREAT_TYPES } from "./data.ts";
 import type {
   AssignmentMap,
   BossConfig,
+  DeviceUnit,
   EncounterResult,
   Odds,
   OddsFactor,
@@ -34,10 +35,54 @@ const EMPTY_MATRIX: Record<string, number> = {};
  * down to a floor. This is what makes every placed device usable at the boss
  * (a short-range net is no longer "useless" against a far drone it would happily
  * kill in the real-time wave).
+ *
+ * Used only as a fallback when a device carries no position (canned rosters that
+ * predate positions). When a device HAS a position, engageFactor below supersedes
+ * this with real approach geometry.
  */
 function rangeFactor(range: number, distance: number): number {
   const cover = Math.min(1, range / Math.max(0.1, distance));
   return 0.5 + 0.5 * cover;
+}
+
+/** Every device keeps a little reach even far from a threat (it never reads as
+ *  literally useless), but position now dominates — see engageFactor. */
+const GEO_FLOOR = 0.12;
+
+/** Plane position (km) for a polar (bearing 0 = north, CW) + radius. Matches the
+ *  real-time engine's spawn convention so boss geometry and wave geometry agree. */
+function polar(bearing: number, dist: number): { x: number; y: number } {
+  const rad = ((bearing - 90) * Math.PI) / 180;
+  return { x: Math.cos(rad) * dist, y: Math.sin(rad) * dist };
+}
+
+/**
+ * Geometry-aware engagement factor: how much of a threat's INBOUND corridor a
+ * device can actually work, given where the device physically sits. The threat
+ * flies a straight line from its spawn (bearing, distance) to the asset at the
+ * centre; we sample that path and measure the fraction of it inside the device's
+ * range. A device sitting on the threat's approach covers most of the corridor
+ * (≈1); one on the OPPOSITE side only catches the drone as it crosses the centre
+ * (near the floor). This is what makes the brain's picks spatially sensible — it
+ * no longer tasks a south-side effector onto a north-side threat.
+ */
+function engageFactor(
+  unit: { range: number; bearing: number; distance?: number },
+  threat: ThreatUnit,
+): number {
+  if (unit.distance == null) return rangeFactor(unit.range, threat.distance);
+  const a = polar(threat.bearing, threat.distance);
+  const p = polar(unit.bearing, unit.distance);
+  const N = 12;
+  let inRange = 0;
+  for (let i = 0; i <= N; i++) {
+    const t = i / N; // 0 = spawn edge, 1 = the asset at centre
+    const dx = a.x * (1 - t) - p.x;
+    const dy = a.y * (1 - t) - p.y;
+    if (Math.hypot(dx, dy) <= unit.range) inRange++;
+  }
+  const coverage = inRange / (N + 1);
+  return GEO_FLOOR + (1 - GEO_FLOOR) * coverage;
 }
 
 /**
@@ -73,10 +118,10 @@ export function computeOdds(
     warnings.push(`${effUnit.name} has NO effect on a ${tt.name}.`);
   }
 
-  // 2. Range to target.
-  const rf = rangeFactor(effUnit.range, threat.distance);
-  factors.push({ label: `Range (${threat.distance.toFixed(1)}km / ${effUnit.range.toFixed(1)}km)`, mult: rf });
-  if (rf <= 0.001) warnings.push(`${threat.label} is outside ${effUnit.name} range.`);
+  // 2. Position vs the threat's inbound corridor (geometry).
+  const rf = engageFactor(effUnit, threat);
+  factors.push({ label: `Position vs approach`, mult: rf });
+  if (rf <= GEO_FLOOR + 0.001) warnings.push(`${effUnit.name} is off ${threat.label}'s approach — poor angle.`);
 
   // 3. Tracking quality from the assigned sensor.
   let trackMult = UNTRACKED_PENALTY;
@@ -84,12 +129,12 @@ export function computeOdds(
     const senUnit = cfg.sensors.find((s) => s.id === sensorId);
     if (senUnit) {
       const q = (senUnit.track ?? EMPTY_MATRIX)[threat.typeId] ?? 0;
-      const senRf = rangeFactor(senUnit.range, threat.distance);
+      const senRf = engageFactor(senUnit, threat);
       if (q <= 0.001) {
         warnings.push(`${senUnit.name} cannot track a ${tt.name}.`);
         trackMult = UNTRACKED_PENALTY;
-      } else if (senRf <= 0.001) {
-        warnings.push(`${threat.label} is beyond ${senUnit.name} range — weak track.`);
+      } else if (senRf <= GEO_FLOOR + 0.001) {
+        warnings.push(`${threat.label} is off ${senUnit.name}'s arc — weak track.`);
         trackMult = UNTRACKED_PENALTY;
       } else {
         // Tracking lifts effectiveness from the untracked floor toward 1.0.
@@ -162,11 +207,11 @@ export function expectedStopped(cfg: BossConfig, map: AssignmentMap): number {
  * possible (robustness), which matches how a good operator actually thinks.
  */
 /** Best contribution a device could make to ANY threat (for candidate pruning). */
-function deviceRelevance(cfg: BossConfig, device: { range: number; effect?: Record<string, number>; track?: Record<string, number> }): number {
+function deviceRelevance(cfg: BossConfig, device: DeviceUnit): number {
   let best = 0;
   for (const t of cfg.threats) {
-    const matrix = device.effect ?? device.track ?? {};
-    const q = (matrix[t.typeId] ?? 0) * rangeFactor(device.range, t.distance);
+    const matrix = device.effect ?? device.track ?? EMPTY_MATRIX;
+    const q = (matrix[t.typeId] ?? 0) * engageFactor(device, t);
     if (q > best) best = q;
   }
   return best;

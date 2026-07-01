@@ -59,6 +59,40 @@ describe("optimal assignment (the brain)", () => {
   });
 });
 
+describe("spatially-sensible assignment (position vs approach)", () => {
+  // One threat inbound from the north. Two identical nets and two identical
+  // radars — one of each sitting NORTH (on the approach), the other SOUTH (the
+  // opposite side). The brain must engage/track with the near devices; tasking
+  // a south-side device onto a north threat is exactly the nonsense we fixed.
+  const cfg: import("./types.ts").BossConfig = {
+    id: "geo",
+    title: "geo",
+    leakTolerance: 0,
+    allowLoss: true,
+    threats: [{ id: "t1", typeId: "rf-quad", label: "North", distance: 3.0, bearing: 0 }],
+    sensors: [
+      { id: "s-near", typeId: "radar", kind: "sensor", name: "Radar N", code: "R", role: "", range: 3, bearing: 0, distance: 2, track: { "rf-quad": 1, autonomy: 1, "low-observable": 0.9 } },
+      { id: "s-far", typeId: "radar", kind: "sensor", name: "Radar S", code: "R", role: "", range: 3, bearing: 180, distance: 2, track: { "rf-quad": 1, autonomy: 1, "low-observable": 0.9 } },
+    ],
+    effectors: [
+      { id: "e-near", typeId: "net-drone", kind: "effector", name: "Net N", code: "N", role: "", range: 2, bearing: 0, distance: 2, effect: { "rf-quad": 0.95, autonomy: 0.78, "low-observable": 0.78 } },
+      { id: "e-far", typeId: "net-drone", kind: "effector", name: "Net S", code: "N", role: "", range: 2, bearing: 180, distance: 2, effect: { "rf-quad": 0.95, autonomy: 0.78, "low-observable": 0.78 } },
+    ],
+  };
+
+  it("engages the threat with the near-side effector, not the opposite side", () => {
+    const opt = computeOptimal(cfg);
+    expect(opt.t1.effectorId).toBe("e-near");
+    expect(opt.t1.sensorId).toBe("s-near");
+  });
+
+  it("a near-side engagement scores far better than the opposite side", () => {
+    const near = computeOdds(cfg, cfg.threats[0], "s-near", "e-near");
+    const far = computeOdds(cfg, cfg.threats[0], "s-far", "e-far");
+    expect(near.p).toBeGreaterThan(far.p * 2);
+  });
+});
+
 describe("resolution & no-early-loss rescue (spec §6.1/§13)", () => {
   it("boss #1 can never be an outright loss", () => {
     // A deliberately terrible assignment: jammer on the autonomy drone, others blind.
