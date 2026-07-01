@@ -526,15 +526,15 @@ export class Game {
       this.operator.setSitrep(s.level.name, "drill · no coordination");
       this.operator.say(
         first
-          ? "Watch the tracks. No shared picture, so each sensor locks its own nearest few — they redundantly double-track the front of the push and their capacity fills. The drones behind get dropped (red), and a shooter can't fire on what nobody's tracking. More leak."
-          : "Again — no coordination. See the wasted double-coverage up front and the dropped tracks behind. Same sensors, worse picture.",
+          ? "Mixed threats inbound, and no shared picture — so it fails more than one way at once. Shooters dog-pile the nearest bird while the rest walk in; the RF-DF is blind to the autonomy drone; the jammer can't touch it; the faint one only one sensor even sees. Watch where it leaks — I'll freeze it and show you why."
+          : "Again, no coordination — and a nastier mix. Same failures, more of them. Watch it break.",
       );
     } else {
       this.operator.setSitrep(s.level.name, "drill · coordinated");
       this.operator.say(
         first
-          ? "Same six devices — but now one fused picture. Capacity pooled and deduped, fire deconflicted, every shooter handed a clean solution. Watch the whole push go down — nothing gets through."
-          : "Coordination holding. Same gear, same threats as before — one shared picture, clean shots, nothing through.",
+          ? "Same six devices, same mixed push — but one fused picture now. A radar picks up the autonomy the RF-DF can't; the RF-DF holds the faint one; and the plan hands each threat the shooter that actually beats it — a net for the jammer-proof bird, not the jammer. Watch every failure from the first pass get answered."
+          : "Coordination holding. Same gear, same mixed threats — right eyes, right shooter to each, nothing through.",
         { accent: true },
       );
     }
@@ -597,9 +597,9 @@ export class Game {
       if (s.activeWave.drill) {
         const leaked = s.leaked - this.drillLeaksAtStart;
         if (leaked > 0) {
-          this.operator.say(`${leaked} got through. Not for lack of shooters — the picture dropped them and ragged shots missed the rest. A coordination problem, not a hardware one.`);
+          this.operator.say(`${leaked} got through — and each for a different reason: wrong eyes, wrong weapon, or nobody freed to shoot. Not one hardware gap. A coordination problem.`);
         } else {
-          this.operator.say("Clean sweep. Same six devices, same push — one fused picture stopped every one. That's the whole pitch.", { accent: true });
+          this.operator.say("Clean sweep. Same six devices, same mixed push — one fused picture put the right eyes and the right shooter on every one. That's the whole pitch.", { accent: true });
         }
       }
     }

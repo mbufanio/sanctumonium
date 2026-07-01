@@ -59,29 +59,38 @@ const BOSS_2: ScheduleEntry = { type: "boss", bossIndex: 2 };
 // level-agnostic (the lesson is universal); per-site flavour lives in terrain,
 // laydown and the endless arcade act.
 //
-// Each scenario is a frontal push from one side. The kill chain, track capacity
-// and fire-control are the REAL engine — the same code the arcade runs. The one
-// deliberate thumb on the scale (drills only, see engine.DRILL_UNCOORD_HIT): with
-// no fused fire-control cueing, uncoordinated shots are ragged, so the
-// uncoordinated grid — sensors redundantly double-tracking the front while the
-// overflow is dropped, shooters piling on and missing — loses HALF the push,
-// while the coordinated grid (pooled/deduped tracks, a spread fire plan, clean
-// solutions) clears it. Leakers in the first pass, none in the second. Same six
+// Each scenario is a frontal push over the north (RF-DF + jammer) sector. The
+// kill chain, track capacity and fire-control are the REAL engine — the same code
+// the arcade runs. The threat MIX is deliberate so the uncoordinated failure is
+// many-faceted, not one note:
+//   • RF quads → fire DISCIPLINE: every shooter dog-piles the closest, the rest
+//     walk past (DOG-PILED / NO SHOOTER FREE).
+//   • an AUTONOMY drone angled in from the east flank (~90°) → the jammer covering
+//     it does nothing, and the nets that COULD net it are tied up on the crowd
+//     (NO SHOOTER FREE, jammer-can't-cover flavour). Bearing chosen so a net can
+//     still reach it once coordinated (it can't at dead-centre).
+//   • a LOW-OBSERVABLE only the RF-DF sees well → DROPPED when the RF-DF saturates
+//     (OFF THE PICTURE); the radars barely return on it.
+// Coordinated, one fused picture assigns the right eyes and the right shooter to
+// each and clears the whole push — verified 0 leaks; uncoordinated leaks ~4. The
+// one deliberate thumb on the scale (drills only, engine.DRILL_UNCOORD_HIT):
+// un-cued uncoordinated fire is ragged, so the failures actually leak. Same six
 // devices, identical spawns — only the brain changed.
 const DRILL_RADIUS = 4 * HEX_SIZE * Math.sqrt(3); // real approach room to engage across
 
-/** A frontal push of `n` RF quads bearing in across `arc` degrees from one side. */
-function concentratedBurst(n: number, arc = 180): Array<[number, ThreatTypeId, number]> {
-  const out: Array<[number, ThreatTypeId, number]> = [];
-  for (let i = 0; i < n; i++) {
-    const bearing = Math.round(((-arc / 2 + (arc / Math.max(1, n - 1)) * i) + 360) % 360);
-    out.push([0.5 + i * 0.1, "rf-quad", bearing]);
-  }
-  return out;
-}
-
-const DRILL_A = concentratedBurst(6); // the intro push (uncoord leaks ~3, coord 0)
-const DRILL_B = concentratedBurst(8); // the bigger one (uncoord leaks ~4, coord 0)
+// Intro push (6): an RF-quad crowd across the north, a low-observable laced in,
+// and the jammer-proof autonomy drone angled in from the flank.
+const DRILL_A: Array<[number, ThreatTypeId, number]> = [
+  [0.5, "rf-quad", 310], [0.6, "rf-quad", 335], [0.7, "low-observable", 350],
+  [0.8, "rf-quad", 20], [0.9, "rf-quad", 45], [1.2, "autonomy", 90],
+];
+// The nastier one (6): stealth-heavy — two low-observables only the RF-DF holds
+// (dropped when it saturates) plus the jammer-proof autonomy, fewer RF to hide
+// behind. Same clean coordinated sweep; uncoordinated leaks across three modes.
+const DRILL_B: Array<[number, ThreatTypeId, number]> = [
+  [0.5, "rf-quad", 320], [0.6, "low-observable", 342], [0.7, "rf-quad", 358],
+  [0.8, "low-observable", 18], [0.9, "rf-quad", 40], [1.3, "autonomy", 90],
+];
 
 function act1DrillSchedule(): ScheduleEntry[] {
   return [
