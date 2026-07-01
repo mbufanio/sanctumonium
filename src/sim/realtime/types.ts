@@ -68,6 +68,11 @@ export interface Drone {
    *  finite track capacity, so this can be empty — a seam — or doubled-up — a
    *  waste). Drives the coordination-failure callouts. */
   trackerIds: string[];
+  /** Drill mode: a drone that came into range while the uncoordinated grid was
+   *  already committed elsewhere and never got assigned an eye. With no
+   *  coordinator to re-task, it stays unwatched and unengaged all the way in —
+   *  the seam that leaks. Sticky once set. Never set under coordination. */
+  unwatched: boolean;
   /** Visual scale (1 = normal; smaller for swarm drones). */
   size: number;
 }

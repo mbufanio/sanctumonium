@@ -20,18 +20,22 @@ export const OPERATOR = "VEGA";
 
 const SIGIL = `<span class="op-sigil" aria-hidden="true">◈</span>`;
 
-interface QueuedLine {
-  text: string;
-  ms: number;
-  accent: boolean;
+/** How many recent lines stay on screen at once (a short rolling transcript). */
+const MAX_LINES = 3;
+/** Default dwell before a line fades out — long, so VEGA reads as calm, not spammy. */
+const DEFAULT_MS = 9000;
+
+interface ActiveLine {
+  node: HTMLElement;
+  timer: number;
 }
 
 export class Operator {
   private sitrep: HTMLElement;
   private panel: HTMLElement;
-  private queue: QueuedLine[] = [];
-  private timer: number | null = null;
+  private lines: ActiveLine[] = [];
   private muted = false;
+  private lastText = "";
 
   constructor() {
     this.sitrep = document.createElement("div");
@@ -63,21 +67,49 @@ export class Operator {
     this.sitrep.hidden = true;
   }
 
-  /** Queue a timed operator line. `accent` tints it in the brain colour. */
+  /**
+   * Show an operator line. Lines STACK (up to MAX_LINES) so the last few stay
+   * readable instead of one flashing line — and each lingers, so VEGA reads as a
+   * calm sit-rep, not a stream of pop-ups. `accent` tints it in the brain colour.
+   */
   say(text: string, opts: { ms?: number; accent?: boolean } = {}): void {
     if (this.muted) return;
-    this.queue.push({ text, ms: opts.ms ?? 4200, accent: !!opts.accent });
-    if (this.timer === null) this.pump();
+    if (text === this.lastText) return; // never repeat the same line back-to-back
+    this.lastText = text;
+
+    const node = document.createElement("div");
+    node.className = "op-entry" + (opts.accent ? " accent" : "");
+    node.innerHTML = `${SIGIL}<span class="op-cs">${OPERATOR}</span><span class="op-text">${text}</span>`;
+    this.panel.hidden = false;
+    this.panel.append(node);
+    // Entrance on the next frame so the transition runs.
+    requestAnimationFrame(() => node.classList.add("show"));
+
+    const entry: ActiveLine = { node, timer: window.setTimeout(() => this.expire(entry), opts.ms ?? DEFAULT_MS) };
+    this.lines.push(entry);
+    while (this.lines.length > MAX_LINES) this.expire(this.lines[0], true);
   }
 
-  /** Drop any pending/onscreen lines (scene change). */
+  private expire(entry: ActiveLine, now = false): void {
+    const i = this.lines.indexOf(entry);
+    if (i < 0) return;
+    this.lines.splice(i, 1);
+    window.clearTimeout(entry.timer);
+    entry.node.classList.remove("show");
+    window.setTimeout(() => {
+      entry.node.remove();
+      if (!this.lines.length) this.panel.hidden = true;
+    }, now ? 0 : 320);
+  }
+
+  /** Drop any onscreen lines (scene change). */
   clearLines(): void {
-    this.queue = [];
-    if (this.timer !== null) {
-      window.clearTimeout(this.timer);
-      this.timer = null;
+    for (const e of this.lines) {
+      window.clearTimeout(e.timer);
+      e.node.remove();
     }
-    this.panel.classList.remove("show");
+    this.lines = [];
+    this.lastText = "";
     this.panel.hidden = true;
   }
 
@@ -85,27 +117,5 @@ export class Operator {
   reset(): void {
     this.clearLines();
     this.hideSitrep();
-  }
-
-  private pump(): void {
-    const next = this.queue.shift();
-    if (!next) {
-      this.timer = null;
-      this.panel.classList.remove("show");
-      // brief fade-out before hiding
-      this.timer = window.setTimeout(() => {
-        this.panel.hidden = true;
-        this.timer = null;
-      }, 260);
-      return;
-    }
-    this.panel.hidden = false;
-    this.panel.classList.toggle("accent", next.accent);
-    this.panel.innerHTML = `${SIGIL}<span class="op-cs">${OPERATOR}</span><span class="op-text">${next.text}</span>`;
-    // restart the entrance animation
-    this.panel.classList.remove("show");
-    void this.panel.offsetWidth;
-    this.panel.classList.add("show");
-    this.timer = window.setTimeout(() => this.pump(), next.ms);
   }
 }

@@ -415,15 +415,15 @@ export class Game {
       this.operator.setSitrep(s.level.name, "drill · no coordination");
       this.operator.say(
         first
-          ? "Watch closely. Six devices, no shared picture — every sensor locks the one loudest threat and the rest fly the whole approach unwatched."
-          : "Again — same six devices, still no coordination. Watch the red rings: those are the lanes nobody's covering.",
+          ? "Watch closely. Six devices, no shared plan — they double up on the obvious threats, two eyes on one, and leave the rest completely unwatched. Those seams leak."
+          : "Again — same six devices, still no coordination. The red rings are threats nobody picked up. No one re-tasks to cover them.",
       );
     } else {
       this.operator.setSitrep(s.level.name, "drill · coordinated");
       this.operator.say(
         first
-          ? "Same six devices — but now they share one picture. Every threat gets its own eyes and its own shooter. Watch nothing get through."
-          : "Coordination holding. Same gear, same threats as before — the difference is all in the picture.",
+          ? "Same six devices — but now one plan. It assigns each threat its own eyes and shooter, and the instant one's clear it re-tasks to the next. Watch nothing get through."
+          : "Coordination holding. Same gear, same threats as before — every one covered, none doubled, none missed.",
         { accent: true },
       );
     }
@@ -482,9 +482,9 @@ export class Game {
       if (s.activeWave.drill) {
         const leaked = s.leaked - this.drillLeaksAtStart;
         if (leaked > 0) {
-          this.operator.say(`${leaked} got through. Not a hardware problem — a coordination problem. Nobody was watching those lanes.`);
+          this.operator.say(`${leaked} got through — the grid doubled up on the loud ones and left those lanes to no one. A coordination problem, not a hardware one.`);
         } else {
-          this.operator.say("Clean. Nothing through — same six devices, one shared picture. That's the whole pitch.", { accent: true });
+          this.operator.say("Clean. Every threat covered, nothing doubled, nothing missed — same six devices. That's the whole pitch.", { accent: true });
         }
       }
     }

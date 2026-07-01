@@ -216,9 +216,6 @@ export class Hud {
       `;
       dock.append(panel);
     } else {
-      const hint = el("div", "build-hint locked");
-      hint.textContent = "◈ Grid is set — same gear, every wave. The brain does the rest.";
-      dock.append(hint);
       const start = el("button", "btn-start") as HTMLButtonElement;
       start.innerHTML = `<span>${opts.startLabel}</span><span class="start-arrow">▶</span>`;
       start.onclick = () => opts.onStart();

@@ -263,21 +263,27 @@ body {
 #op-sitrep .op-sr-status { font-size: 0.8rem; color: var(--text-dim); }
 #op-sitrep .op-sr-status::before { content: "· "; color: var(--panel-edge); }
 
-/* Timed line panel — bottom-left, above the dock's left edge, non-blocking. */
+/* Rolling operator transcript — bottom-left, a short stack of recent lines that
+   linger and fade, newest at the bottom. Non-blocking. */
 #op-line {
   position: fixed; left: 1.2rem; bottom: 8.4rem; z-index: 28;
+  display: flex; flex-direction: column; gap: 0.4rem;
+  max-width: min(36rem, 64vw); pointer-events: none;
+}
+.op-entry {
   display: flex; align-items: flex-start; gap: 0.6rem;
-  max-width: min(36rem, 64vw);
-  padding: 0.7rem 0.9rem; border-radius: 12px;
+  padding: 0.6rem 0.85rem; border-radius: 12px;
   background: linear-gradient(180deg, rgba(10, 20, 30, 0.94), rgba(8, 16, 24, 0.9));
   border: 1px solid var(--panel-edge); border-left: 2px solid var(--brain);
-  pointer-events: none; opacity: 0; transform: translateY(8px);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
-#op-line.show { opacity: 1; transform: translateY(0); }
-#op-line.accent { border-left-color: var(--brain-gold); box-shadow: 0 0 24px rgba(0, 229, 255, 0.18); }
-#op-line .op-text { font-size: 0.94rem; line-height: 1.35; color: var(--text); }
-#op-line .op-cs { padding-top: 0.15rem; }
+.op-entry.show { opacity: 1; transform: translateY(0); }
+/* Older lines dim so the newest reads as current, but stay legible. */
+.op-entry.show:not(:last-child) { opacity: 0.55; }
+.op-entry.accent { border-left-color: var(--brain-gold); box-shadow: 0 0 24px rgba(0, 229, 255, 0.18); }
+.op-entry .op-text { font-size: 0.92rem; line-height: 1.35; color: var(--text); }
+.op-entry .op-cs { padding-top: 0.15rem; }
 @media (max-width: 760px) { #op-line { bottom: 7rem; max-width: 84vw; } }
 
 /* ---- arcade survival --------------------------------------------------- */

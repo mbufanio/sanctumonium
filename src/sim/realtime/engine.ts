@@ -321,7 +321,7 @@ function pickTarget(
   for (const d of drones) {
     if (d.state !== "alive") continue;
     if (claimed?.has(d.id)) continue; // coordinated: already being engaged this step
-    if (drill && !d.tracked) continue; // drills: no fire-control track, no shot — coverage decides
+    if (drill && (!d.tracked || d.unwatched)) continue; // drills: no track / written-off seam → no shot
     if (coordinated && e.effect[d.typeId] <= 0) continue; // grid won't task a useless shot
     if (planeDist(e.pos, d.pos) > e.radius) continue;
     if (!losClear(e.pos, d.pos, terrain, true)) continue; // building or no-fire zone in the way
@@ -369,37 +369,53 @@ function assignSensors(
   const canSee = (s: PlacedDevice, droneId: number) => (capableOf.get(droneId) ?? []).some((c) => c.s.id === s.id);
   const byDanger = [...alive].sort((a, b) => planeLen(a.pos) - planeLen(b.pos));
 
+  const free = new Set(sensors.map((s) => s.id));
+  const assign = (droneId: number, sticky: boolean) => {
+    const c = (capableOf.get(droneId) ?? []).filter((x) => free.has(x.s.id)).sort((a, b) => b.q - a.q)[0];
+    if (!c) return false;
+    free.delete(c.s.id);
+    push(droneId, c);
+    if (sticky) rt.sensorLocks[c.s.id] = droneId;
+    return true;
+  };
+
   if (env.coordinated) {
-    // The manager reallocates EVERY step to cover the most drones: each drone,
-    // most-dangerous first, takes its best still-free sensor. No stickiness, no
-    // redundant double-coverage — the same radars, used well.
-    const used = new Set<string>();
-    for (const d of byDanger) {
-      const free = (capableOf.get(d.id) ?? [])
-        .filter((c) => !used.has(c.s.id))
-        .sort((a, b) => b.q - a.q);
-      if (free[0]) {
-        used.add(free[0].s.id);
-        push(d.id, free[0]);
-      }
-    }
-    rt.sensorLocks = {}; // manager isn't sticky
+    // The manager REALLOCATES every step to SPREAD the same sensors: each drone,
+    // most-dangerous first, takes one free sensor. Distinct coverage, and if a
+    // threat dies the freed sensor is instantly re-tasked to whatever's now
+    // uncovered — no drone double-watched while a neighbour goes blind.
+    rt.sensorLocks = {};
+    for (const d of byDanger) assign(d.id, false);
     return out;
   }
 
-  // Uncoordinated: with no fused picture, every sensor slaves to the SAME
-  // loudest/most-central return — the whole grid piles its attention on one
-  // track and everything else is a blind spot until that one resolves. A lock
-  // is sticky (they hold the lead until it's gone), so a wingman flies the
-  // entire approach untracked and unengaged — the seam nobody was watching.
-  const lockedLead = rt.sensorLocks.__lead;
-  const leadStillUp = lockedLead != null && alive.some((d) => d.id === lockedLead && sensors.some((s) => canSee(s, d.id)));
-  const lead = leadStillUp ? alive.find((d) => d.id === lockedLead)! : byDanger.find((d) => sensors.some((s) => canSee(s, d.id)));
-  if (lead) {
-    rt.sensorLocks = { __lead: lead.id };
-    for (const s of sensors) if (canSee(s, lead.id)) push(lead.id, { s, q: s.track[lead.typeId] });
-  } else {
-    rt.sensorLocks = {};
+  // Uncoordinated: each sensor ACQUIRES a target on contact and FIXATES — no
+  // shared plan, no coordinator to re-task it. On contact the sensors pile
+  // REDUNDANTLY onto the loudest targets (a second, wasted eye before a
+  // neighbour gets its first), so a drone can be left with none. And crucially,
+  // when a sensor's target is destroyed it does NOT get re-tasked to that
+  // unwatched drone — it just goes quiet. So the seam nobody acquired stays
+  // unwatched all the way in and leaks. Re-tasking is the coordinator's job.
+  const RETIRED = -1;
+  for (const s of sensors) {
+    const locked = rt.sensorLocks[s.id];
+    if (locked === undefined) continue; // never acquired — free to acquire below
+    free.delete(s.id); // committed (or retired): not available for new work
+    if (locked === RETIRED) continue;
+    const d = alive.find((x) => x.id === locked);
+    if (d && canSee(s, locked)) push(locked, { s, q: s.track[d.typeId] });
+    else if (!d) rt.sensorLocks[s.id] = RETIRED; // target gone → sensor falls silent
+  }
+  for (const d of byDanger) {
+    if (!free.size) break;
+    if (d.unwatched) continue; // a written-off seam — nobody re-tasks to it
+    assign(d.id, true); // first eye on the loudest still-uncovered drone
+    if (free.size) assign(d.id, true); // then DOUBLE it before moving on — the waste
+  }
+  // Any drone the grid can SEE but left without an eye is a seam: mark it (sticky)
+  // so the uncoordinated grid never recovers it. This is what leaks.
+  for (const d of alive) {
+    if (!d.unwatched && !out.has(d.id) && (capableOf.get(d.id) ?? []).length > 0) d.unwatched = true;
   }
   return out;
 }
@@ -449,6 +465,7 @@ function spawnDrone(rt: RealtimeState, s: SpawnEntry, spawnRadius: number): Dron
     tracked: false,
     trackId: id,
     trackerIds: [],
+    unwatched: false,
     size: m.size ?? 1,
   };
 }

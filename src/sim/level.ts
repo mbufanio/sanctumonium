@@ -60,26 +60,28 @@ const BOSS_2: ScheduleEntry = { type: "boss", bossIndex: 2 };
 // laydown and the endless arcade act.
 //
 // Each scenario is a spread of drones arriving together from all around the
-// ring. UNCOORDINATED, the grid has no fused picture, so every sensor slaves to
-// the single loudest return — one drone is tracked and engaged while the rest
-// fly their whole approach in a blind spot and leak. COORDINATED, the manager
-// hands each drone its own sensor, so every shooter engages its local threat and
-// nothing gets through. Same six devices. (Tuned headlessly: coord clears with
-// zero leaks; uncoord leaks roughly half.)
-const DRILL_RADIUS = 3.6 * HEX_SIZE * Math.sqrt(3); // just outside the ring-3 sensors
+// ring — MORE threats than the grid can independently keep eyes on. UNCOORDINATED,
+// the devices work with no shared picture: several pile REDUNDANTLY onto the same
+// loud targets (two eyes on one) and the threats they leave uncovered are never
+// re-tasked to — so those seams fly the whole approach unwatched and leak.
+// COORDINATED, the manager spreads the same devices one-per-threat and instantly
+// re-tasks a freed device to whatever's now uncovered — every threat gets an eye
+// and a shooter, and nothing gets through. Same six devices. (Tuned headlessly:
+// coord clears with zero leaks; uncoord leaks the seams it never covered.)
+const DRILL_RADIUS = 3 * HEX_SIZE * Math.sqrt(3); // just outside the ring-3 sensors
 
 /** A spread burst of `n` RF quads arriving together across `arc` degrees. */
 function spreadBurst(n: number, arc = 320): Array<[number, ThreatTypeId, number]> {
   const out: Array<[number, ThreatTypeId, number]> = [];
   for (let i = 0; i < n; i++) {
     const bearing = Math.round((((arc / (n - 1)) * i - arc / 2) + 360) % 360);
-    out.push([0.5 + i * 0.04, "rf-quad", bearing]);
+    out.push([0.5 + i * 0.05, "rf-quad", bearing]);
   }
   return out;
 }
 
-const DRILL_A = spreadBurst(6); // the intro drill
-const DRILL_B = spreadBurst(8); // the bigger one
+const DRILL_A = spreadBurst(5); // the intro drill (uncoord leaks ~2, coord 0)
+const DRILL_B = spreadBurst(7); // the bigger one (uncoord leaks ~4, coord 0)
 
 function act1DrillSchedule(): ScheduleEntry[] {
   return [
