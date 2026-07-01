@@ -248,6 +248,10 @@ body {
   border: 1px solid rgba(0, 229, 255, 0.5); font-size: 0.8rem; flex: 0 0 auto;
 }
 .op-cs { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.18em; color: var(--brain); }
+/* VEGA attribution on the full-screen narrative beats (title / unlock) so the
+   flavour voice is consistently the operator, not a stray narrator. */
+.op-attrib .op-cs { display: inline-block; margin-right: 0.5rem; font-weight: 700; }
+.unlock-attrib { margin-bottom: 0.4rem; }
 
 /* Persistent sit-rep slot — just under the HUD bar, top-left. */
 #op-sitrep {

@@ -41,10 +41,10 @@ export class Screens {
       <div class="screen-kicker">COUNTER-UAS · LIVE DEFENSE</div>
       <h1 class="screen-h1">Hostile drones inbound.</h1>
       <h2 class="screen-h2">You'll have the gear. We'll see if that's enough.</h2>
-      <p class="screen-body">
-        A coordinated strike is closing on the site. You have sensors and
-        shooters. Whether that's a <em>defense</em> is the question we're here to
-        answer.
+      <p class="screen-body op-attrib">
+        <span class="op-cs">◈ VEGA</span> A coordinated strike is closing on the
+        site. You've got sensors and shooters. Whether that adds up to a
+        <em>defense</em> — that's what we're here to find out.
       </p>
     `;
     const btn = button("Begin", "screen-cta");
@@ -84,6 +84,7 @@ export class Screens {
     this.clear();
     const s = screen("unlock-screen");
     s.innerHTML = `
+      <div class="op-attrib unlock-attrib"><span class="op-cs">◈ VEGA</span></div>
       <div class="op-line op-1">"We held. Barely. The gear's fine — the problem is it's fighting as separate pieces."</div>
       <div class="op-line op-2">"Patch every unit into the coordination layer. One fused picture. Shots called together."</div>
       <div class="op-line op-3">"Coordination online. Re-engage."</div>
