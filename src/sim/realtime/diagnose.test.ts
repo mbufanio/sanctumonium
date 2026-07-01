@@ -38,9 +38,9 @@ function sensor(id: string, track: Partial<Record<ThreatTypeId, number>>): Place
   };
 }
 
-function effector(id: string, effect: Partial<Record<ThreatTypeId, number>>): PlacedDevice {
+function effector(id: string, placeableId: string, x: number, effect: Partial<Record<ThreatTypeId, number>>): PlacedDevice {
   return {
-    id, kind: "effector", placeableId: "net-drone", hex: { q: 1, r: 0 }, pos: { x: 10, y: 0 }, level: 0,
+    id, kind: "effector", placeableId, hex: { q: 1, r: 0 }, pos: { x, y: 0 }, level: 0,
     radius: 9999, fireInterval: 1, magazine: 0, reloadTime: 0, ammo: 0, reloadCd: 0, aoe: 0,
     effect: { "rf-quad": 0, autonomy: 0, "low-observable": 0, ...effect },
     track: { "rf-quad": 0, autonomy: 0, "low-observable": 0 },
@@ -72,34 +72,51 @@ describe("drill freeze trigger", () => {
   });
 });
 
-describe("drill diagnosis", () => {
-  const sensors = [sensor("s1", { "rf-quad": 0.9 })];
-  const nets = [effector("e1", { "rf-quad": 0.9 })];
+describe("drill diagnosis (spatially verified)", () => {
+  const sensors = [sensor("s1", { "rf-quad": 0.9, autonomy: 0.9 })];
 
-  it("uncoordinated singles out one dog-piled magnet; the rest leak untouched", () => {
+  it("PASSES OVER the drone closer to the asset when the net is on a nearer contact", () => {
+    // Net at x=50. Its NEAREST tracked contact is d2 (x=48) — so it fires there.
+    // d1 (x=20) is closest to the ASSET and in range, but passed over; d3 (x=70) too.
+    const net = effector("e1", "net-drone", 50, { "rf-quad": 0.9, autonomy: 0.9 });
     const rt = createRealtimeState();
-    rt.drones = [drone(1, 20, 0), drone(2, 40, 0), drone(3, 60, 0)];
-    const diag = diagnoseDrill(rt, [...sensors, ...nets], false, NO_TERRAIN);
-    expect(diag.map((d) => d.tag)).toEqual(["DOG-PILED", "NO SHOOTER FREE", "NO SHOOTER FREE"]);
-    expect(diag[0].tone).toBe("warn");
-    expect(diag[1].tone).toBe("bad");
+    rt.drones = [drone(1, 20, 0), drone(2, 48, 0), drone(3, 70, 0)];
+    const diag = diagnoseDrill(rt, [...sensors, net], false, NO_TERRAIN);
+    // d2 is being killed (net's nearest) → omitted; d1 and d3 are passed over.
+    expect(diag.map((d) => d.droneId).sort()).toEqual([1, 3]);
+    expect(diag.every((d) => d.tag === "PASSED OVER")).toBe(true);
+    const lead = diag.find((d) => d.droneId === 1)!;
+    expect(lead.tone).toBe("bad");
+    expect(lead.detail).toContain("closest threat to the asset");
+    expect(lead.detail).toContain(`TRK ${String(2).padStart(4, "0")}`); // names the point-blank contact
   });
 
-  it("uncoordinated flags an untracked overflow drone as off the picture", () => {
+  it("flags a jammer's WASTED SHOT on an autonomy it can't kill", () => {
+    // Only a jammer is in range of the autonomy; it fires (nearest) but can't kill it.
+    const jam = effector("j1", "rf-jammer", 40, { "rf-quad": 0.9, autonomy: 0 });
     const rt = createRealtimeState();
-    rt.drones = [drone(1, 20, 0), drone(2, 40, 0, { tracked: false })];
-    const diag = diagnoseDrill(rt, [...sensors, ...nets], false, NO_TERRAIN);
-    const off = diag.find((d) => d.droneId === 2);
-    expect(off?.tag).toBe("OFF THE PICTURE");
-    expect(off?.tone).toBe("bad");
+    rt.drones = [drone(1, 20, 0, { typeId: "autonomy" })];
+    const diag = diagnoseDrill(rt, [...sensors, jam], false, NO_TERRAIN);
+    expect(diag[0].tag).toBe("WASTED SHOT");
+    expect(diag[0].detail).toContain("jammer");
   });
 
-  it("coordinated marks every threat handled (held, never dropped)", () => {
+  it("marks an untracked drone off the picture (verified from sensor coverage)", () => {
+    const net = effector("e1", "net-drone", 50, { "rf-quad": 0.9 });
     const rt = createRealtimeState();
-    rt.drones = [drone(1, 20, 0), drone(2, 40, 0, { tracked: false })];
-    const diag = diagnoseDrill(rt, [...sensors, ...nets], true, NO_TERRAIN);
+    rt.drones = [drone(1, 48, 0), drone(2, 40, 0, { tracked: false })];
+    const diag = diagnoseDrill(rt, [...sensors, net], false, NO_TERRAIN);
+    const off = diag.find((d) => d.droneId === 2)!;
+    expect(off.tag).toBe("OFF THE PICTURE");
+    expect(off.tone).toBe("bad");
+  });
+
+  it("coordinated frames every threat as prioritised/assigned, not passed over", () => {
+    const net = effector("e1", "net-drone", 50, { "rf-quad": 0.9, autonomy: 0.9 });
+    const rt = createRealtimeState();
+    rt.drones = [drone(1, 20, 0), drone(2, 40, 0, { typeId: "autonomy" })];
+    const diag = diagnoseDrill(rt, [...sensors, net], true, NO_TERRAIN);
     expect(diag.every((d) => d.tone === "good")).toBe(true);
-    // The untracked one is reassured as held in the pooled net, not dropped.
-    expect(diag.find((d) => d.droneId === 2)?.tag).toBe("IN THE NET");
+    expect(diag.every((d) => d.tag === "ASSIGNED" || d.tag === "PRIORITISED")).toBe(true);
   });
 });

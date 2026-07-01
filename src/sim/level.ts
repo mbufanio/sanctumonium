@@ -59,37 +59,38 @@ const BOSS_2: ScheduleEntry = { type: "boss", bossIndex: 2 };
 // level-agnostic (the lesson is universal); per-site flavour lives in terrain,
 // laydown and the endless arcade act.
 //
-// Each scenario is a frontal push over the north (RF-DF + jammer) sector. The
-// kill chain, track capacity and fire-control are the REAL engine — the same code
-// the arcade runs. The threat MIX is deliberate so the uncoordinated failure is
-// many-faceted, not one note:
-//   • RF quads → fire DISCIPLINE: every shooter dog-piles the closest, the rest
-//     walk past (DOG-PILED / NO SHOOTER FREE).
-//   • an AUTONOMY drone angled in from the east flank (~90°) → the jammer covering
-//     it does nothing, and the nets that COULD net it are tied up on the crowd
-//     (NO SHOOTER FREE, jammer-can't-cover flavour). Bearing chosen so a net can
-//     still reach it once coordinated (it can't at dead-centre).
-//   • a LOW-OBSERVABLE only the RF-DF sees well → DROPPED when the RF-DF saturates
-//     (OFF THE PICTURE); the radars barely return on it.
-// Coordinated, one fused picture assigns the right eyes and the right shooter to
-// each and clears the whole push — verified 0 leaks; uncoordinated leaks ~4. The
-// one deliberate thumb on the scale (drills only, engine.DRILL_UNCOORD_HIT):
-// un-cued uncoordinated fire is ragged, so the failures actually leak. Same six
-// devices, identical spawns — only the brain changed.
+// Each drill is a pair of COLUMNS driven straight down the two net lanes (bearings
+// 120 & 240) — the lanes the effectors actually cover. The kill chain, track
+// capacity and fire-control are the REAL engine (the same code the arcade runs);
+// only the effectors' TARGETING changes between passes:
+//   • Uncoordinated, every effector runs "target nearest" — it locks the tracked
+//     drone physically closest to itself. So a net endlessly re-engages whatever
+//     contact is right on top of it and never turns to the leader that has slipped
+//     PAST it toward the asset (the closest threat to the asset, still in the net's
+//     range). Purely local, threat-blind: it also can't tell that the autonomy in
+//     the column needs the NET specifically (a jammer does nothing to it).
+//   • Coordinated, the plan puts each effector on the most-urgent thing it can
+//     actually kill and holds it — leaders first, right tool on each — clearing
+//     the column.
+// The freeze frame catches exactly this: the net point-blank on a mid-column drone
+// while the leader is ignored. A modest fire-control factor (drills only,
+// engine.DRILL_UNCOORD_HIT — un-cued fire is genuinely rougher) sets the leak
+// magnitude; the WHY on every card is the true geometry above. Same six devices,
+// identical spawns — only the brain changed.
 const DRILL_RADIUS = 4 * HEX_SIZE * Math.sqrt(3); // real approach room to engage across
 
-// Intro push (6): an RF-quad crowd across the north, a low-observable laced in,
-// and the jammer-proof autonomy drone angled in from the flank.
+// Intro (6): two RF columns down the net lanes, an autonomy laced mid-column on
+// the right (the net is the ONLY thing that can kill it — the jammer is useless).
 const DRILL_A: Array<[number, ThreatTypeId, number]> = [
-  [0.5, "rf-quad", 310], [0.6, "rf-quad", 335], [0.7, "low-observable", 350],
-  [0.8, "rf-quad", 20], [0.9, "rf-quad", 45], [1.2, "autonomy", 90],
+  [0.5, "rf-quad", 120], [0.85, "autonomy", 120], [1.2, "rf-quad", 120],
+  [0.6, "rf-quad", 240], [0.95, "rf-quad", 240], [1.3, "rf-quad", 240],
 ];
-// The nastier one (6): stealth-heavy — two low-observables only the RF-DF holds
-// (dropped when it saturates) plus the jammer-proof autonomy, fewer RF to hide
-// behind. Same clean coordinated sweep; uncoordinated leaks across three modes.
+// The nastier one (6): a low-observable (only the RF-DF holds it) leads the right
+// column, an autonomy the left — two "wrong tool / wrong eyes" threats in the
+// stream. Same clean coordinated sweep; uncoordinated leaks the mis-served ones.
 const DRILL_B: Array<[number, ThreatTypeId, number]> = [
-  [0.5, "rf-quad", 320], [0.6, "low-observable", 342], [0.7, "rf-quad", 358],
-  [0.8, "low-observable", 18], [0.9, "rf-quad", 40], [1.3, "autonomy", 90],
+  [0.5, "rf-quad", 120], [0.85, "low-observable", 120], [1.2, "rf-quad", 120],
+  [0.6, "autonomy", 240], [0.95, "rf-quad", 240], [1.3, "rf-quad", 240],
 ];
 
 function act1DrillSchedule(): ScheduleEntry[] {

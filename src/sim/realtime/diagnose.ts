@@ -110,91 +110,78 @@ function bearingOf(d: Drone): number {
   return Math.round((Math.atan2(d.pos.y, d.pos.x) * 180) / Math.PI + 90 + 360) % 360;
 }
 
-/** Why an UNTRACKED drone has no fire-control track (matchup-specific). */
+/** What "target nearest" actually shoots: for each effector, the tracked drone
+ *  physically closest to IT (matchup-blind, in range + LOS) — the real, verifiable
+ *  choice the uncoordinated grid makes this step. */
+function nearestTargets(effectors: PlacedDevice[], drones: Drone[], terrain: TerrainMap): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const e of effectors) {
+    let best = -1;
+    let bd = Infinity;
+    for (const d of drones) {
+      if (d.state !== "alive" || !d.tracked) continue;
+      const dist = planeDist(e.pos, d.pos);
+      if (dist <= e.radius && dist < bd && losClear(e.pos, d.pos, terrain, true)) { bd = dist; best = d.id; }
+    }
+    if (best >= 0) out.set(e.id, best);
+  }
+  return out;
+}
+
+/** Track label for a drone id (e.g. "TRK 0142"), for referencing one card in another. */
+function trk(id: number, drones: Drone[]): string {
+  const d = drones.find((x) => x.id === id);
+  return `TRK ${String(d?.trackId ?? id).padStart(4, "0")}`;
+}
+
+/** Why an UNTRACKED drone has no fire-control track (verified from sensor coverage). */
 function untrackedFail(d: Drone, sensors: PlacedDevice[], terrain: TerrainMap): { tag: string; detail: string } {
   const capable = capableSensors(d, sensors, terrain);
   const blind = blindSensors(d, sensors, terrain);
-  // Covered only by eyes that can't classify this type (RF-DF vs a silent drone).
   if (capable.length === 0 && blind.length > 0) {
     if (d.typeId === "autonomy") {
-      return { tag: "WRONG EYES", detail: `The only sensor watching this sector is the ${devName(blind[0].placeableId)} — and an autonomy drone emits no radio to find. To it, this is empty sky. Only a radar can see it, and none is looking here.` };
+      return { tag: "WRONG EYES", detail: `The only sensor on it here is the ${devName(blind[0].placeableId)} — and an autonomy drone emits no radio to find, so to that sensor it's empty sky. Only a radar can see it; none is looking here. No track, no shot.` };
     }
-    return { tag: "WRONG EYES", detail: `The sensor covering this sector (${devName(blind[0].placeableId)}) can't classify a ${d.typeId} — wrong eyes for the type, so it stays an unclassified blip no shooter can engage.` };
+    return { tag: "WRONG EYES", detail: `The sensor covering it (${devName(blind[0].placeableId)}) can't classify a ${d.typeId} — wrong eyes for the type, so it stays an unclassified blip no effector can engage.` };
   }
   if (d.typeId === "low-observable") {
-    return { tag: "OFF THE PICTURE", detail: "Only the RF-DF can hold a contact this faint — the radars barely return on a low-observable. With the RF-DF's capacity already full, it slipped the picture and no radar can re-acquire it." };
+    return { tag: "OFF THE PICTURE", detail: "A low-observable returns almost nothing on radar; only the RF-DF holds it — and with its capacity full it was dropped. Nothing re-acquired it, so no effector has a firing solution." };
   }
-  if (d.typeId === "autonomy") {
-    return { tag: "OFF THE PICTURE", detail: "The RF-DF nearest this sector is blind to an autonomy drone, so it leans entirely on the radars across the field — and they're saturated on the leaders. Dropped, and nothing re-tasks to it." };
-  }
-  return { tag: "OFF THE PICTURE", detail: "Every radar redundantly locked the leaders and filled its track capacity — this one was dropped and, with nobody re-tasking, never re-acquired. A shooter can't fire on what isn't tracked." };
+  return { tag: "OFF THE PICTURE", detail: "A sensor here filled its track capacity on nearer contacts and dropped this one — and, with no coordinator to re-task, it was never re-acquired. An effector can't fire on what isn't tracked." };
 }
 
-/** Tracked, but the only shooter in reach carries the wrong weapon for the type. */
-function wrongWeaponFail(d: Drone, effectors: PlacedDevice[], terrain: TerrainMap): { tag: string; detail: string } {
-  const useless = inRangeShooters(d, effectors, terrain)[0];
-  if (d.typeId === "autonomy") {
-    return { tag: "WRONG WEAPON", detail: `It's tracked — but the only shooter in reach is the ${devName(useless?.placeableId ?? "rf-jammer")}, and severing a radio link does nothing to an autonomy drone. It needs a net, and none is in position.` };
-  }
-  return { tag: "WRONG WEAPON", detail: `Tracked, but the only shooter in range (${devName(useless?.placeableId ?? "")}) has no effect on a ${d.typeId}. Wrong tool; the one that beats it is out of position.` };
-}
-
-/** Tracked, a capable shooter exists but is busy — type-aware (for the autonomy,
- *  the only FREE shooter in reach is the jammer, which can't touch it). */
-function noShooterDetail(d: Drone, effectors: PlacedDevice[], terrain: TerrainMap): string {
-  if (d.typeId === "autonomy") {
-    const jammerCovers = inRangeShooters(d, effectors, terrain).some((e) => e.effect[d.typeId] <= 0);
-    return jammerCovers
-      ? "A net could take it — but the nets are tied up on the crowd, and the only free shooter covering it is the jammer, which does nothing to an autonomy drone. It walks straight in."
-      : "A net could take it, but every net is committed to the drones ahead. Nothing was freed for the jammer-proof bird, so it leaks.";
-  }
-  if (d.typeId === "low-observable") {
-    return "The RF-DF has it, and a shooter is in range — but every effector is locked on the drones ahead. Nothing was freed for the faint one, and it slips in.";
-  }
-  return "Tracked and inside a shooter's range — but every effector is fixed on the drone ahead, so nothing is engaging this one. It leaks untouched.";
-}
-
-/** The dog-pile magnet's copy: every shooter chose the same closest threat. */
-const DOG_PILE_DETAIL =
-  "Every shooter locked the same target — the closest one — and they're overkilling it in lockstep, emptying their magazines together. Meanwhile the rest of the push walks in behind it.";
-
-/** Coordinated: how the fused grid resolves this threat (matchup-specific). */
+/**
+ * Coordinated: how the plan handles this threat. At the coordinated freeze the
+ * push is caught at its peak (still out near the edge), so this is the plan's
+ * INTENT — targeting by urgency + matchup rather than by proximity — which then
+ * clears the whole wave (verified 0 leaks).
+ */
 function coordFix(d: Drone, hasShooter: boolean): { tag: string; detail: string } {
+  const netLine =
+    d.typeId === "autonomy"
+      ? " It's an autonomy drone, so the plan reserves a NET for it — never the jammer that can't touch it."
+      : d.typeId === "low-observable"
+      ? " The RF-DF holds this faint one in the shared picture, and a matching effector is reserved."
+      : "";
   if (d.tracked && hasShooter) {
-    if (d.typeId === "autonomy") {
-      return { tag: "ASSIGNED", detail: "The fused picture put a radar on it — the RF-DF can't — and the plan assigned a net, never the useless jammer. Down clean." };
-    }
-    if (d.typeId === "low-observable") {
-      return { tag: "ASSIGNED", detail: "The RF-DF — the one sensor that sees a low-observable well — holds it in the shared picture, and a shooter that beats it is already assigned." };
-    }
-    return { tag: "ASSIGNED", detail: "Fused track from every capable radar, and a shooter that beats it is already assigned — it's down well before it's close." };
+    return { tag: "ASSIGNED", detail: `Assigned to the effector that beats it, held there until it's down — urgent-first, right tool.${netLine}` };
   }
-  if (d.tracked) {
-    return { tag: "TRACKED", detail: "Locked in the one shared picture; the fire plan hands it a shooter the instant it's in range." };
-  }
-  if (d.typeId === "autonomy") {
-    return { tag: "IN THE NET", detail: "Held in the pooled picture by a radar the solo grid never tasked to it. As it closes, the plan hands it a net — never the jammer that can't touch it." };
-  }
-  if (d.typeId === "low-observable") {
-    return { tag: "IN THE NET", detail: "The RF-DF has it in the shared picture; pooled capacity means it isn't dropped the way the solo grid dropped it. A shooter's routed as it closes." };
-  }
-  return { tag: "IN THE NET", detail: "Capacity is pooled, so — unlike the solo grid that dropped its overflow — this one is held, not lost. It gets a shooter as it closes. No seam." };
+  return { tag: "PRIORITISED", detail: `In the plan. It's targeted by URGENCY and matchup, not by whatever's nearest a weapon — so as it leads the push it gets the right effector, not a pass-over.${netLine}` };
 }
 
 /**
  * Diagnose the drones in the crunch, front-to-back (pin #1 = nearest the asset).
- * Uncoordinated names each failure; coordinated names each fix. The mixed drill
- * threat set makes the failures matchup-specific, so the prose is per type:
- *   • fire DISCIPLINE (any type): with no plan every shooter locks the closest
- *     threat and overkills it while the rest walk past (DOG-PILED / NO SHOOTER FREE).
- *   • WRONG EYES (autonomy): the RF-DF nearest the front is blind to a silent
- *     autonomy drone, so it never gets a track.
- *   • WRONG WEAPON (autonomy): tracked, but the only shooter in reach is the
- *     jammer — which does nothing to it.
- *   • DROPPED (low-observable): only the RF-DF holds a contact that faint, and
- *     when it saturates the radars can't re-acquire it.
- * Coordinated resolves each: fused eyes (a radar for the autonomy, the RF-DF for
- * the stealth body) and a fire plan that assigns the RIGHT shooter.
+ * Every uncoordinated card states only what is VERIFIABLY true of the live sim
+ * this step — computed from each effector's actual "target nearest" choice and
+ * each drone's real coverage:
+ *   • PASSED OVER — an effector that could kill it has it in range, but it's
+ *     firing on the contact physically nearer to itself (named), so this one —
+ *     closer to the ASSET — is skipped. The core "nearest, not most-urgent" fault.
+ *   • WASTED SHOT — a jammer is firing on it but can't kill the type; no net is on it.
+ *   • NO WEAPON HERE — only an effector that can't beat the type is in range.
+ *   • OFF THE PICTURE / WRONG EYES — untracked (verified from sensor coverage).
+ *   • DOG-PILED — two effectors verified firing on the same drone (redundant).
+ * Drones actually being killed this step are omitted (they aren't leaking).
  */
 export function diagnoseDrill(
   rt: RealtimeState,
@@ -206,17 +193,13 @@ export function diagnoseDrill(
   const effectors = placed.filter((p) => p.kind === "effector");
   const cluster = rt.drones
     .filter((d) => d.state === "alive" && planeLen(d.pos) <= RING_FIELD)
-    .sort((a, b) => planeLen(a.pos) - planeLen(b.pos))
-    .slice(0, MAX_DIAG);
+    .sort((a, b) => planeLen(a.pos) - planeLen(b.pos));
 
-  // The magnet every uncoordinated shooter piles onto: the most-central TRACKED
-  // drone that at least one ready shooter covers (they all make the same call).
-  const magnet = coordinated
-    ? null
-    : cluster.find((d) => d.tracked && readyShooters(d, effectors, terrain).length > 0) ?? null;
+  const firing = coordinated ? null : nearestTargets(effectors, rt.drones, terrain);
 
   const out: DrillDiag[] = [];
   for (const d of cluster) {
+    if (out.length >= MAX_DIAG) break;
     const t = THREAT_TYPES[d.typeId];
     const base = {
       droneId: d.id,
@@ -225,23 +208,54 @@ export function diagnoseDrill(
       code: t?.code ?? d.typeId,
       bearingDeg: bearingOf(d),
     };
-    const shooters = readyShooters(d, effectors, terrain);
 
     if (coordinated) {
-      out.push({ ...base, tone: "good", ...coordFix(d, shooters.length > 0) });
+      out.push({ ...base, tone: "good", ...coordFix(d, readyShooters(d, effectors, terrain).length > 0) });
       continue;
     }
 
-    // Uncoordinated: name why it's leaking.
+    // ---- uncoordinated: only verified-true claims ----
     if (!d.tracked) {
       out.push({ ...base, tone: "bad", ...untrackedFail(d, sensors, terrain) });
-    } else if (shooters.length === 0 && inRangeShooters(d, effectors, terrain).length > 0) {
-      out.push({ ...base, tone: "bad", ...wrongWeaponFail(d, effectors, terrain) });
-    } else if (d.id === magnet?.id) {
-      out.push({ ...base, tag: "DOG-PILED", tone: "warn", detail: DOG_PILE_DETAIL });
-    } else {
-      out.push({ ...base, tag: "NO SHOOTER FREE", tone: "bad", detail: noShooterDetail(d, effectors, terrain) });
+      continue;
     }
+    const inRange = inRangeShooters(d, effectors, terrain);
+    const killersInRange = inRange.filter((e) => e.effect[d.typeId] > 0);
+    const firingOnD = inRange.filter((e) => firing!.get(e.id) === d.id);
+    const killersOnD = firingOnD.filter((e) => e.effect[d.typeId] > 0);
+
+    if (killersOnD.length >= 2) {
+      // Verified redundancy: two capable effectors on the same drone.
+      out.push({ ...base, tag: "DOG-PILED", tone: "warn", detail: `${killersOnD.map((e) => devName(e.placeableId)).join(" and ")} are BOTH firing on this one — redundant overkill — so a contact only one of them could reach goes unengaged.` });
+      continue;
+    }
+    if (killersOnD.length === 1) continue; // being killed this step — not a leaker
+
+    // Tracked, not being effectively engaged. Why?
+    if (killersInRange.length >= 1) {
+      // An effector that COULD kill it is in range but firing on a nearer contact.
+      const e = killersInRange.reduce((a, b) => (planeDist(a.pos, d.pos) <= planeDist(b.pos, d.pos) ? a : b));
+      const tgt = firing!.get(e.id);
+      const onName = devName(e.placeableId);
+      const autoNote = d.typeId === "autonomy" ? ` And only a net can kill an autonomy drone — the jammer can't — so a pass-over here is a clean leak.` : "";
+      const because =
+        tgt != null && tgt !== d.id
+          ? `the ${onName} is point-blank on ${trk(tgt, rt.drones)} right on top of it`
+          : `the ${onName} is servicing the contact nearest itself`;
+      out.push({ ...base, tag: "PASSED OVER", tone: "bad", detail: `It's the closest threat to the asset here and in the ${onName}'s range — but on target-nearest, ${because}, so this one is skipped and walks in.${autoNote}` });
+      continue;
+    }
+    // No capable effector in range. Is a useless one (jammer) firing on it?
+    const uselessOnD = firingOnD.find((e) => e.effect[d.typeId] <= 0);
+    if (uselessOnD) {
+      out.push({ ...base, tag: "WASTED SHOT", tone: "bad", detail: `The ${devName(uselessOnD.placeableId)} is locked on it — its nearest contact — but does nothing to a ${d.typeId}. The shot is wasted and no net is on it.` });
+      continue;
+    }
+    if (inRange.length >= 1) {
+      out.push({ ...base, tag: "NO WEAPON HERE", tone: "bad", detail: `Only the ${devName(inRange[0].placeableId)} reaches it, and it can't beat a ${d.typeId}. No net covers this lane, so nothing can take the shot.` });
+      continue;
+    }
+    out.push({ ...base, tag: "UNCOVERED", tone: "bad", detail: `No effector's coverage reaches this approach — it's outside every weapon's range as it comes in.` });
   }
 
   return out;

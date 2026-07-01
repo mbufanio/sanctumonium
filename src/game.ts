@@ -242,8 +242,8 @@ export class Game {
     if (diags.length === 0) { this.drillFrozen = false; return; } // nothing to teach — carry on
     this.operator.say(
       coordinated
-        ? "Hold it there. Same push, same six devices — look how the fused grid has already answered every one."
-        : "Freeze it. Look at what's about to get through — and exactly why the grid can't stop it.",
+        ? "Hold it there. Same push, same six devices — look how the plan already has the right effector on each."
+        : "Freeze it. Look at what each effector chose to shoot — and the one it passed over, right in its range.",
       { accent: coordinated },
     );
     this.showDrillFreeze(diags, coordinated);
@@ -526,15 +526,15 @@ export class Game {
       this.operator.setSitrep(s.level.name, "drill · no coordination");
       this.operator.say(
         first
-          ? "Mixed threats inbound, and no shared picture — so it fails more than one way at once. Shooters dog-pile the nearest bird while the rest walk in; the RF-DF is blind to the autonomy drone; the jammer can't touch it; the faint one only one sensor even sees. Watch where it leaks — I'll freeze it and show you why."
-          : "Again, no coordination — and a nastier mix. Same failures, more of them. Watch it break.",
+          ? "No coordination — so every effector just shoots whatever's NEAREST it. Watch: a net keeps firing on the contact right on top of it and never turns to the one that's slipped past, closest to the asset. I'll freeze it and show you, target by target."
+          : "Again, no plan — every effector on its own nearest contact. Same fault, a nastier stream. Watch the leaders walk in.",
       );
     } else {
       this.operator.setSitrep(s.level.name, "drill · coordinated");
       this.operator.say(
         first
-          ? "Same six devices, same mixed push — but one fused picture now. A radar picks up the autonomy the RF-DF can't; the RF-DF holds the faint one; and the plan hands each threat the shooter that actually beats it — a net for the jammer-proof bird, not the jammer. Watch every failure from the first pass get answered."
-          : "Coordination holding. Same gear, same mixed threats — right eyes, right shooter to each, nothing through.",
+          ? "Same six devices, same push — but now the plan targets by URGENCY and matchup, not by whatever's nearest. Each effector takes the most-dangerous thing it can actually kill — leaders first, a net for the autonomy, never the jammer — and holds it. Watch the pass-overs from the first run get answered."
+          : "Coordination holding. Same gear, same stream — urgent-first, right tool on each, nothing through.",
         { accent: true },
       );
     }
@@ -597,9 +597,9 @@ export class Game {
       if (s.activeWave.drill) {
         const leaked = s.leaked - this.drillLeaksAtStart;
         if (leaked > 0) {
-          this.operator.say(`${leaked} got through — and each for a different reason: wrong eyes, wrong weapon, or nobody freed to shoot. Not one hardware gap. A coordination problem.`);
+          this.operator.say(`${leaked} got through — passed over while an effector fired on whatever was nearest it, not on the one about to hit us. Same weapons; wrong choices. A coordination problem.`);
         } else {
-          this.operator.say("Clean sweep. Same six devices, same mixed push — one fused picture put the right eyes and the right shooter on every one. That's the whole pitch.", { accent: true });
+          this.operator.say("Clean sweep. Same six devices, same stream — the plan just put the right effector on the right threat, urgent-first. That's the whole pitch.", { accent: true });
         }
       }
     }

@@ -233,17 +233,18 @@ export function stepWave(
 
   // 3. Effectors engage.
   //
-  //    WITHOUT the brain, every shooter independently locks the SAME obvious
-  //    threat — the one closest to the asset — regardless of whether its weapon
-  //    can even beat it. So the grid piles fire onto one or two drones, overkills
-  //    them, and the rest of the swarm walks straight past unengaged. That's how
-  //    an uncoordinated defence loses: not for lack of shooters, but because they
-  //    all shoot the same thing.
+  //    WITHOUT the brain, every effector runs "target NEAREST" — it locks the
+  //    tracked threat physically closest to ITSELF. A purely local call, and the
+  //    mistake the brain fixes: nearest-first ignores which threat is most urgent
+  //    (one that has slipped past toward the asset), wastes a weapon on a type it
+  //    can't beat (a jammer on the nearest autonomy drone), and lets effectors
+  //    with overlapping coverage double up on the same near contact while a threat
+  //    only one of them could reach goes unengaged.
   //
   //    WITH the brain, a fire-control plan (rt.effectorTargets) assigns each
-  //    shooter a DISTINCT track it can actually kill and holds it there until the
-  //    threat is down — spreading fire across the whole swarm. Same shooters,
-  //    every one on a different drone.
+  //    effector a DISTINCT track it can actually kill, prioritising the most urgent
+  //    (nearest the asset) — spreading fire across the whole push, right tool on
+  //    each. Same effectors, every one on a different, deliberate target.
   const plan = rt.effectorTargets;
   const assignedIds = new Set<number>();
   if (env.coordinated) {
@@ -309,9 +310,10 @@ export function stepWave(
       target = held && inEngageable(e, held, terrain) ? held : pickPlanTarget(rt.drones, e, assignedIds, terrain);
       if (target) { plan[e.id] = target.id; assignedIds.add(target.id); }
     } else {
-      // No plan: lock the single most-central threat in range — same choice every
-      // shooter makes, so they pile on it.
-      target = pickClosest(rt.drones, e, terrain);
+      // No plan: "target nearest" — lock the tracked threat closest to THIS
+      // effector. A purely local call: no sense of which threat is most urgent,
+      // whether the weapon even beats it, or what the other effectors are doing.
+      target = pickNearestToSelf(rt.drones, e, terrain);
     }
     if (!target) continue;
     if (firesOn) {
@@ -402,19 +404,22 @@ function pickPlanTarget(drones: Drone[], e: PlacedDevice, assigned: Set<number>,
   return best;
 }
 
-/** UNCOORDINATED acquisition: shoot the single most-central TRACKED threat in
- *  range (a shooter still needs a track), matchup be damned. Every shooter makes
- *  the same call, so they pile on it — and drops in the track picture are threats
- *  no shooter ever gets a solution on. */
-function pickClosest(drones: Drone[], e: PlacedDevice, terrain: TerrainMap): Drone | null {
+/** UNCOORDINATED acquisition — "target NEAREST" (the naive default): each effector
+ *  locks the tracked threat physically closest to ITSELF, matchup be damned. It's
+ *  the mistake the brain fixes: nearest-first ignores WHICH threat is most urgent
+ *  (a bird that has slipped past toward the asset), wastes a weapon on a type it
+ *  can't beat (a jammer grabbing the nearest autonomy drone), and lets effectors
+ *  whose coverage overlaps double up on the same near contact while a threat only
+ *  one of them covered goes unengaged. Every effector makes the same local call. */
+function pickNearestToSelf(drones: Drone[], e: PlacedDevice, terrain: TerrainMap): Drone | null {
   let best: Drone | null = null;
-  let bestLen = Infinity;
+  let bestDist = Infinity;
   for (const d of drones) {
     if (d.state !== "alive" || !d.tracked) continue;
-    if (planeDist(e.pos, d.pos) > e.radius) continue;
+    const dist = planeDist(e.pos, d.pos);
+    if (dist > e.radius) continue;
     if (!losClear(e.pos, d.pos, terrain, true)) continue;
-    const len = planeLen(d.pos);
-    if (len < bestLen) { bestLen = len; best = d; }
+    if (dist < bestDist) { bestDist = dist; best = d; }
   }
   return best;
 }
