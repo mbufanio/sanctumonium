@@ -150,8 +150,12 @@ export interface RealtimeState {
    *  work. Persists across steps so shooters HOLD a distinct track until it's
    *  down (spreading fire); empty/ignored when uncoordinated. */
   effectorTargets: Record<string, number>;
+  /** DRILL + uncoordinated only: drones dropped when the redundant, un-managed
+   *  track picture saturated. With no coordinator to re-task freed capacity, a
+   *  dropped track is never re-acquired — it stays unwatched and leaks. */
+  droppedTracks: Set<number>;
 }
 
 export function createRealtimeState(): RealtimeState {
-  return { time: 0, drones: [], nextDroneId: 1, spawnCursor: 0, fx: [], killed: 0, leaked: 0, effectorTargets: {} };
+  return { time: 0, drones: [], nextDroneId: 1, spawnCursor: 0, fx: [], killed: 0, leaked: 0, effectorTargets: {}, droppedTracks: new Set() };
 }

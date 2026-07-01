@@ -422,8 +422,8 @@ export class Game {
       this.operator.setSitrep(s.level.name, "drill · coordinated");
       this.operator.say(
         first
-          ? "Same six sensors — but now one fused picture. Capacity is pooled and deduped: no wasted double-tracking, so we hold far more of the push at once and every shooter gets a solution. Watch how many fewer get through."
-          : "Coordination holding. Same gear, same threats — one shared track picture, nothing dropped that we can help. Far fewer leak.",
+          ? "Same six devices — but now one fused picture. Capacity pooled and deduped, fire deconflicted, every shooter handed a clean solution. Watch the whole push go down — nothing gets through."
+          : "Coordination holding. Same gear, same threats as before — one shared picture, clean shots, nothing through.",
         { accent: true },
       );
     }
@@ -482,9 +482,9 @@ export class Game {
       if (s.activeWave.drill) {
         const leaked = s.leaked - this.drillLeaksAtStart;
         if (leaked > 0) {
-          this.operator.say(`${leaked} got through. Not for lack of shooters — the track picture dropped them. A coordination problem, not a hardware one.`);
+          this.operator.say(`${leaked} got through. Not for lack of shooters — the picture dropped them and ragged shots missed the rest. A coordination problem, not a hardware one.`);
         } else {
-          this.operator.say("Held. Same six devices — a fused picture just drops fewer tracks. That's the whole pitch.", { accent: true });
+          this.operator.say("Clean sweep. Same six devices, same push — one fused picture stopped every one. That's the whole pitch.", { accent: true });
         }
       }
     }
