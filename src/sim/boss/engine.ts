@@ -45,9 +45,12 @@ function rangeFactor(range: number, distance: number): number {
   return 0.5 + 0.5 * cover;
 }
 
-/** Every device keeps a little reach even far from a threat (it never reads as
- *  literally useless), but position now dominates — see engageFactor. */
-const GEO_FLOOR = 0.12;
+/** Every device keeps meaningful reach even off a threat's approach, so a
+ *  cross-field device with the RIGHT matchup can still be the correct call — but
+ *  a well-placed device is clearly better for an equal matchup (see engageFactor).
+ *  This is the balance the boss puzzle needs: matchup can outweigh proximity, yet
+ *  proximity still breaks ties. */
+const GEO_FLOOR = 0.45;
 
 /** Plane position (km) for a polar (bearing 0 = north, CW) + radius. Matches the
  *  real-time engine's spawn convention so boss geometry and wave geometry agree. */

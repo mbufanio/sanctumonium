@@ -59,29 +59,29 @@ const BOSS_2: ScheduleEntry = { type: "boss", bossIndex: 2 };
 // level-agnostic (the lesson is universal); per-site flavour lives in terrain,
 // laydown and the endless arcade act.
 //
-// Each scenario is a spread of drones arriving together from all around the
-// ring — MORE threats than the grid can independently keep eyes on. UNCOORDINATED,
-// the devices work with no shared picture: several pile REDUNDANTLY onto the same
-// loud targets (two eyes on one) and the threats they leave uncovered are never
-// re-tasked to — so those seams fly the whole approach unwatched and leak.
-// COORDINATED, the manager spreads the same devices one-per-threat and instantly
-// re-tasks a freed device to whatever's now uncovered — every threat gets an eye
-// and a shooter, and nothing gets through. Same six devices. (Tuned headlessly:
-// coord clears with zero leaks; uncoord leaks the seams it never covered.)
-const DRILL_RADIUS = 3 * HEX_SIZE * Math.sqrt(3); // just outside the ring-3 sensors
+// Each scenario is a CONCENTRATED push — a cluster of drones bearing in from one
+// sector, so several sensors see the same targets. UNCOORDINATED, each sensor
+// independently locks its own nearest few, so they REDUNDANTLY double-track the
+// front of the cluster and their finite track capacity fills — the drones behind
+// are dropped, untracked, and a shooter can't get a solution on them, so more
+// leak. COORDINATED, the network fuses one shared picture: capacity is pooled and
+// deduped, so far more of the cluster is held and engaged, and fewer get through.
+// Same six devices — the fused net just drops fewer tracks. (Real mechanics; the
+// difference is honest, not scripted.)
+const DRILL_RADIUS = 1.8 * HEX_SIZE * Math.sqrt(3); // inside the sensor-overlap zone
 
-/** A spread burst of `n` RF quads arriving together across `arc` degrees. */
-function spreadBurst(n: number, arc = 320): Array<[number, ThreatTypeId, number]> {
+/** A concentrated cluster of `n` RF quads bearing in across `arc` degrees. */
+function concentratedBurst(n: number, arc = 120): Array<[number, ThreatTypeId, number]> {
   const out: Array<[number, ThreatTypeId, number]> = [];
   for (let i = 0; i < n; i++) {
-    const bearing = Math.round((((arc / (n - 1)) * i - arc / 2) + 360) % 360);
-    out.push([0.5 + i * 0.05, "rf-quad", bearing]);
+    const bearing = Math.round(((-arc / 2 + (arc / Math.max(1, n - 1)) * i) + 360) % 360);
+    out.push([0.5 + i * 0.12, "rf-quad", bearing]);
   }
   return out;
 }
 
-const DRILL_A = spreadBurst(5); // the intro drill (uncoord leaks ~2, coord 0)
-const DRILL_B = spreadBurst(7); // the bigger one (uncoord leaks ~4, coord 0)
+const DRILL_A = concentratedBurst(8); // the intro push
+const DRILL_B = concentratedBurst(10); // the bigger one
 
 function act1DrillSchedule(): ScheduleEntry[] {
   return [

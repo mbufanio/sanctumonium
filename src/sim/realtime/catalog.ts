@@ -67,6 +67,10 @@ export interface Placeable {
   effect?: Record<ThreatTypeId, number>;
   /** Sensors: tracking quality per threat type (0 = cannot track). */
   track?: Record<ThreatTypeId, number>;
+  /** Sensors: how many simultaneous fire-control tracks it can hold. A saturated
+   *  sensor drops the overflow; a fused (coordinated) network POOLS capacity and
+   *  shares tracks, so nothing gets dropped — the core value of coordination. */
+  trackCapacity?: number;
   /** Short within-class upgrade path (spec §7 — 2–4 steps). */
   upgrades: UpgradeStep[];
 }
@@ -89,6 +93,7 @@ const RADAR: Placeable = {
   cooldown: 0,
   aoe: 0,
   track: { ...SENSOR_TYPES.radar.track },
+  trackCapacity: 4,
   upgrades: [
     { cost: 70, label: "Extended Range", rangeMul: 1.3 },
     { cost: 110, label: "Multi-Track", trackAdd: { "low-observable": 0.35 }, rangeMul: 1.15 },
@@ -107,6 +112,7 @@ const RF_DF: Placeable = {
   cooldown: 0,
   aoe: 0,
   track: { ...SENSOR_TYPES["rf-df"].track },
+  trackCapacity: 3,
   upgrades: [
     { cost: 60, label: "Extended Range", rangeMul: 1.3 },
     { cost: 100, label: "Wideband", trackAdd: { "low-observable": 0.08 }, rangeMul: 1.2 },
@@ -163,6 +169,7 @@ const AESA: Placeable = {
   code: "AESA",
   role: "Phased-array radar — tracks everything, even the quiet ones.",
   cost: 150,
+  trackCapacity: 12,
   radius: km(5.0),
   cooldown: 0,
   aoe: 0,
@@ -282,6 +289,8 @@ export interface DeviceStats {
   reloadTime: number;
   effect: Record<ThreatTypeId, number>;
   track: Record<ThreatTypeId, number>;
+  /** Sensors: simultaneous fire-control tracks it can hold (0 for effectors). */
+  trackCapacity: number;
 }
 
 /** Resolve a placeable's stats at a given upgrade level (applies steps 0..level-1). */
@@ -307,7 +316,7 @@ export function deviceStats(p: Placeable, level: number): DeviceStats {
       for (const k of THREAT_KEYS) if (u.trackAdd[k]) track[k] = Math.min(1, track[k] + u.trackAdd[k]!);
     }
   }
-  return { radius, fireInterval, aoe, magazine, reloadTime, effect, track };
+  return { radius, fireInterval, aoe, magazine, reloadTime, effect, track, trackCapacity: p.trackCapacity ?? 0 };
 }
 
 /** Cost to take a device from its current level to the next, or null if maxed. */

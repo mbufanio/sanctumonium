@@ -199,6 +199,7 @@ function simDevice(placeableId: string, hex: Hex): PlacedDevice {
     aoe: st.aoe,
     effect: st.effect,
     track: st.track,
+    trackCapacity: st.trackCapacity,
     cooldown: 0,
   };
 }

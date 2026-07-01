@@ -128,6 +128,7 @@ export function makePlaced(placeableId: string, hex: Hex): PlacedDevice {
     aoe: s.aoe,
     effect: s.effect,
     track: s.track,
+    trackCapacity: s.trackCapacity,
     cooldown: 0,
   };
 }
@@ -146,6 +147,7 @@ export function upgradeDevice(dev: PlacedDevice): void {
   dev.aoe = s.aoe;
   dev.effect = s.effect;
   dev.track = s.track;
+  dev.trackCapacity = s.trackCapacity;
 }
 
 export function createInitialState(level: LevelDef): GameState {

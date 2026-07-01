@@ -36,6 +36,8 @@ export interface PlacedDevice {
   effect: Record<ThreatTypeId, number>;
   /** Sensors: tracking quality per threat type. */
   track: Record<ThreatTypeId, number>;
+  /** Sensors: simultaneous fire-control tracks it can hold (0 for effectors). */
+  trackCapacity: number;
   /** Effectors: remaining seconds until the next shot may fire. */
   cooldown: number;
 }
@@ -64,15 +66,9 @@ export interface Drone {
   tracked: boolean;
   /** Stable per-drone track number for the telemetry readout (e.g. 0147). */
   trackId: number;
-  /** Device ids of the sensors ASSIGNED to track it this step (drill mode uses
-   *  finite track capacity, so this can be empty — a seam — or doubled-up — a
-   *  waste). Drives the coordination-failure callouts. */
+  /** Device ids of the capable sensors with a return on it this step — drives
+   *  the track-line callouts (which sensors are working this drone). */
   trackerIds: string[];
-  /** Drill mode: a drone that came into range while the uncoordinated grid was
-   *  already committed elsewhere and never got assigned an eye. With no
-   *  coordinator to re-task, it stays unwatched and unengaged all the way in —
-   *  the seam that leaks. Sticky once set. Never set under coordination. */
-  unwatched: boolean;
   /** Visual scale (1 = normal; smaller for swarm drones). */
   size: number;
 }
@@ -150,12 +146,12 @@ export interface RealtimeState {
   /** Tallies for scoring/economy. */
   killed: number;
   leaked: number;
-  /** Drill mode only: sticky sensor→drone locks. Uncoordinated sensors HOLD a
-   *  target once acquired (so two can stay stuck on one drone while another
-   *  slips in untracked); the coordinated manager reallocates every step. */
-  sensorLocks: Record<string, number>;
+  /** COORDINATED fire-control plan: effectorId → the drone id it's assigned to
+   *  work. Persists across steps so shooters HOLD a distinct track until it's
+   *  down (spreading fire); empty/ignored when uncoordinated. */
+  effectorTargets: Record<string, number>;
 }
 
 export function createRealtimeState(): RealtimeState {
-  return { time: 0, drones: [], nextDroneId: 1, spawnCursor: 0, fx: [], killed: 0, leaked: 0, sensorLocks: {} };
+  return { time: 0, drones: [], nextDroneId: 1, spawnCursor: 0, fx: [], killed: 0, leaked: 0, effectorTargets: {} };
 }

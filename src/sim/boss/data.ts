@@ -113,24 +113,33 @@ function eUnit(id: string, typeId: EffectorTypeId, bearing: number, distance = 2
  */
 export const BOSS_1: BossConfig = {
   id: "boss-1",
-  title: "Coordinated Strike — Sector East",
+  title: "Coordinated Strike — Mixed Threats",
   leakTolerance: 1,
   allowLoss: false,
+  // Three threats, deliberately NOT solvable by "nearest device to nearest
+  // threat" (against the fixed Act-1 laydown: RF-DF + jammer at 0°, radar + net
+  // at 120° and 240°). The AUTONOMY drone sits by the RF-DF + jammer — both
+  // useless on it (a jammer can't touch a fibre/autonomy bird; an RF-DF can't
+  // track a silent one), so its eyes and its shot must come from a radar + net
+  // across the field. The RF quad sits next to a radar + net (tempting) but is
+  // the ONLY thing the RF-DF + jammer can handle, so it should be left to them —
+  // freeing that near net for the low-observable. Matchup drives the plan.
   threats: [
-    { id: "t1", typeId: "rf-quad", label: "Bandit-1", distance: 2.6, bearing: 35 },
-    { id: "t2", typeId: "rf-quad", label: "Bandit-2", distance: 1.8, bearing: 70 },
-    { id: "t3", typeId: "autonomy", label: "Bandit-3", distance: 3.0, bearing: 110 },
-    { id: "t4", typeId: "low-observable", label: "Bandit-4", distance: 2.2, bearing: 150 },
+    { id: "t1", typeId: "autonomy", label: "Bandit-1", distance: 2.4, bearing: 5 },
+    { id: "t2", typeId: "rf-quad", label: "Bandit-2", distance: 2.2, bearing: 125 },
+    { id: "t3", typeId: "low-observable", label: "Bandit-3", distance: 2.0, bearing: 245 },
   ],
+  // Canned fallback roster (used only if the player fielded no devices at all);
+  // aligned to the threats so it stays cleanly solvable for the guardrail tests.
   sensors: [
-    sUnit("s-radar-1", "radar", 20),
-    sUnit("s-radar-2", "radar", 100),
-    sUnit("s-rfdf-1", "rf-df", 160),
+    sUnit("s-radar-1", "radar", 5),
+    sUnit("s-radar-2", "radar", 245),
+    sUnit("s-rfdf-1", "rf-df", 125),
   ],
   effectors: [
-    eUnit("e-net-1", "net-drone", 50),
-    eUnit("e-net-2", "net-drone", 130),
-    eUnit("e-jam-1", "rf-jammer", 90),
+    eUnit("e-net-1", "net-drone", 5),
+    eUnit("e-net-2", "net-drone", 245),
+    eUnit("e-jam-1", "rf-jammer", 125),
   ],
 };
 
@@ -144,23 +153,27 @@ export const BOSS_2: BossConfig = {
   id: "boss-2",
   title: "Coordinated Strike — Multi-Axis",
   leakTolerance: 1,
-  allowLoss: true,
+  // The catharsis: solving the matchup puzzle wins it; a blunder is floored to a
+  // narrow win, never an outright loss (the sale, not a game-over).
+  allowLoss: false,
+  // Same trap, arranged differently: the AUTONOMY sits by the RF-DF + jammer
+  // (both useless on it) and must be reached by a net + radar across the field;
+  // the RF quad by a radar + net should be handed to the RF-DF + jammer, freeing
+  // that net for the autonomy; the low-observable is where a radar + net already
+  // are.
   threats: [
-    { id: "t1", typeId: "rf-quad", label: "Bandit-1", distance: 2.0, bearing: 25 },
-    { id: "t2", typeId: "autonomy", label: "Bandit-2", distance: 1.8, bearing: 65 },
-    { id: "t3", typeId: "low-observable", label: "Bandit-3", distance: 1.6, bearing: 115 },
-    { id: "t4", typeId: "rf-quad", label: "Bandit-4", distance: 2.6, bearing: 155 },
+    { id: "t1", typeId: "autonomy", label: "Bandit-1", distance: 2.2, bearing: 5 },
+    { id: "t2", typeId: "low-observable", label: "Bandit-2", distance: 2.0, bearing: 125 },
+    { id: "t3", typeId: "rf-quad", label: "Bandit-3", distance: 2.4, bearing: 245 },
   ],
   sensors: [
-    sUnit("s-radar-1", "radar", 20),
-    sUnit("s-radar-2", "radar", 95),
-    sUnit("s-rfdf-1", "rf-df", 140),
-    sUnit("s-rfdf-2", "rf-df", 170),
+    sUnit("s-radar-1", "radar", 5),
+    sUnit("s-radar-2", "radar", 125),
+    sUnit("s-rfdf-1", "rf-df", 245),
   ],
   effectors: [
-    eUnit("e-net-1", "net-drone", 45),
+    eUnit("e-net-1", "net-drone", 5),
     eUnit("e-net-2", "net-drone", 125),
-    eUnit("e-jam-1", "rf-jammer", 80),
-    eUnit("e-net-3", "net-drone", 160),
+    eUnit("e-jam-1", "rf-jammer", 245),
   ],
 };

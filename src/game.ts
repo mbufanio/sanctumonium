@@ -159,16 +159,16 @@ export class Game {
     const s = this.state;
     if (!s.rt || !s.activeWave) return;
     const coordinated = s.brainUnlocked && !s.brainStaffDisabled;
-    // Act-1 drills run in slow-motion with finite sensor track capacity so the
-    // coordination failures (double-track / dogpile / seam) are legible.
+    // Act-1 drills use the SAME engine as any wave, just slowed down with the
+    // teaching callouts on, so the coordination failure (pile-on / leak) is
+    // legible.
     const drill = !!s.activeWave.drill;
     if (drill) dt *= s.activeWave.timeScale ?? 0.5;
     const res = stepWave(s.rt, s.placed, s.activeWave, dt, this.rng, {
       spawnRadius: (drill && s.activeWave.spawnRadius) || this.world.spawnRadius(s),
       coordinated,
       terrain: this.terrain,
-      trackLimited: drill,
-      trackCapacity: 1,
+      drill,
     });
 
     for (const k of res.kills) {
@@ -415,15 +415,15 @@ export class Game {
       this.operator.setSitrep(s.level.name, "drill · no coordination");
       this.operator.say(
         first
-          ? "Watch closely. Six devices, no shared plan — they double up on the obvious threats, two eyes on one, and leave the rest completely unwatched. Those seams leak."
-          : "Again — same six devices, still no coordination. The red rings are threats nobody picked up. No one re-tasks to cover them.",
+          ? "Watch the tracks. No shared picture, so each sensor locks its own nearest few — they redundantly double-track the front of the push and their capacity fills. The drones behind get dropped (red), and a shooter can't fire on what nobody's tracking. More leak."
+          : "Again — no coordination. See the wasted double-coverage up front and the dropped tracks behind. Same sensors, worse picture.",
       );
     } else {
       this.operator.setSitrep(s.level.name, "drill · coordinated");
       this.operator.say(
         first
-          ? "Same six devices — but now one plan. It assigns each threat its own eyes and shooter, and the instant one's clear it re-tasks to the next. Watch nothing get through."
-          : "Coordination holding. Same gear, same threats as before — every one covered, none doubled, none missed.",
+          ? "Same six sensors — but now one fused picture. Capacity is pooled and deduped: no wasted double-tracking, so we hold far more of the push at once and every shooter gets a solution. Watch how many fewer get through."
+          : "Coordination holding. Same gear, same threats — one shared track picture, nothing dropped that we can help. Far fewer leak.",
         { accent: true },
       );
     }
@@ -482,9 +482,9 @@ export class Game {
       if (s.activeWave.drill) {
         const leaked = s.leaked - this.drillLeaksAtStart;
         if (leaked > 0) {
-          this.operator.say(`${leaked} got through — the grid doubled up on the loud ones and left those lanes to no one. A coordination problem, not a hardware one.`);
+          this.operator.say(`${leaked} got through. Not for lack of shooters — the track picture dropped them. A coordination problem, not a hardware one.`);
         } else {
-          this.operator.say("Clean. Every threat covered, nothing doubled, nothing missed — same six devices. That's the whole pitch.", { accent: true });
+          this.operator.say("Held. Same six devices — a fused picture just drops fewer tracks. That's the whole pitch.", { accent: true });
         }
       }
     }

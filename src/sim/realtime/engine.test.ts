@@ -155,57 +155,6 @@ describe("magazine / reload discipline", () => {
   });
 });
 
-describe("drill track capacity (Act-1 sensor-coordination lesson)", () => {
-  // Two radars whose coverage overlaps, two RF quads inbound close together.
-  // With finite track capacity (drill mode), uncoordinated the radars both lock
-  // the loud/central drone and leave the other an untracked SEAM; coordinated a
-  // manager spreads them so both drones are covered. Same two radars.
-  const radars = [device("sensor", "radar", 0, 0), device("sensor", "radar", 1, -1)];
-  const wave: WaveDef = {
-    index: 1,
-    kind: "normal",
-    label: "pair",
-    spawns: [
-      { at: 0, typeId: "rf-quad", bearing: 0 },
-      { at: 0, typeId: "rf-quad", bearing: 12 },
-    ],
-    stipend: 0,
-  };
-
-  function coverage(coordinated: boolean) {
-    const rt = createRealtimeState();
-    const rng = new Rng(1);
-    let seamFrames = 0; // one drone unwatched while the other is covered
-    let doubledFrames = 0; // a drone held by 2+ sensors (redundant)
-    let bothCoveredFrames = 0;
-    for (let i = 0; i < 300; i++) {
-      const res = stepWave(rt, radars, wave, 1 / 60, rng, { spawnRadius: 140, coordinated, trackLimited: true, trackCapacity: 1 });
-      const alive = rt.drones.filter((d) => d.state === "alive");
-      if (alive.length === 2) {
-        const trackers = alive.map((d) => d.trackerIds.length);
-        if (trackers.some((n) => n === 0) && trackers.some((n) => n >= 1)) seamFrames++;
-        if (trackers.some((n) => n >= 2)) doubledFrames++;
-        if (trackers.every((n) => n >= 1)) bothCoveredFrames++;
-      }
-      if (res.waveComplete) break;
-    }
-    return { seamFrames, doubledFrames, bothCoveredFrames };
-  }
-
-  it("uncoordinated wastes a sensor double-tracking and leaves a seam", () => {
-    const un = coverage(false);
-    expect(un.doubledFrames).toBeGreaterThan(0);
-    expect(un.seamFrames).toBeGreaterThan(0);
-  });
-
-  it("coordinated spreads the same radars to cover both drones", () => {
-    const co = coverage(true);
-    const un = coverage(false);
-    expect(co.bothCoveredFrames).toBeGreaterThan(un.bothCoveredFrames);
-    expect(co.doubledFrames).toBe(0);
-  });
-});
-
 describe("brain coordination (spec §12 face 1 — same hardware, better used)", () => {
   // Four overlapping net-drones around the centre, all tracked by a central
   // radar, against a dense wave. Without coordination they dogpile the most
