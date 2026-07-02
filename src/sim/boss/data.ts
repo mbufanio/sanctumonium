@@ -116,30 +116,33 @@ export const BOSS_1: BossConfig = {
   title: "Coordinated Strike — Mixed Threats",
   leakTolerance: 1,
   allowLoss: false,
-  // Three threats, deliberately NOT solvable by "nearest device to nearest
-  // threat" (against the fixed Act-1 laydown: RF-DF + jammer at 0°, radar + net
-  // at 120° and 240°). The AUTONOMY drone sits by the RF-DF + jammer — both
-  // useless on it (a jammer can't touch a fibre/autonomy bird; an RF-DF can't
-  // track a silent one), so its eyes and its shot must come from a radar + net
-  // across the field. The RF quad sits next to a radar + net (tempting) but is
-  // the ONLY thing the RF-DF + jammer can handle, so it should be left to them —
-  // freeing that near net for the low-observable. Matchup drives the plan.
+  // Three threats fanned across the NORTHERN corridor (the Act-1 laydown is
+  // defense-in-depth around it: radar + net pairs at ~300° and ~60°, RF-DF +
+  // jammer at 0°), deliberately NOT solvable by "nearest device to nearest
+  // threat". The AUTONOMY drone comes straight down the middle onto the RF-DF +
+  // jammer — both useless on it (a jammer can't touch an autonomy bird; an
+  // RF-DF can't track a silent one), so its eyes and shot must come from a
+  // flanking radar + net. The RF quad rides in over the eastern pair (tempting)
+  // but is the ONLY thing the RF-DF + jammer can fully service, so it should be
+  // left to them — freeing that net for the middle. The low-observable hugs the
+  // western pair, whose radar barely sees it: its eyes must be the RF-DF from
+  // across the corridor, its shot the aligned net. Matchup drives the plan.
   threats: [
     { id: "t1", typeId: "autonomy", label: "Bandit-1", distance: 2.4, bearing: 5 },
-    { id: "t2", typeId: "rf-quad", label: "Bandit-2", distance: 2.2, bearing: 125 },
-    { id: "t3", typeId: "low-observable", label: "Bandit-3", distance: 2.0, bearing: 245 },
+    { id: "t2", typeId: "rf-quad", label: "Bandit-2", distance: 2.2, bearing: 65 },
+    { id: "t3", typeId: "low-observable", label: "Bandit-3", distance: 2.0, bearing: 300 },
   ],
   // Canned fallback roster (used only if the player fielded no devices at all);
-  // aligned to the threats so it stays cleanly solvable for the guardrail tests.
+  // mirrors the Act-1 laydown bearings so it stays cleanly solvable for tests.
   sensors: [
-    sUnit("s-radar-1", "radar", 5),
-    sUnit("s-radar-2", "radar", 245),
-    sUnit("s-rfdf-1", "rf-df", 125),
+    sUnit("s-radar-1", "radar", 300),
+    sUnit("s-radar-2", "radar", 60),
+    sUnit("s-rfdf-1", "rf-df", 0),
   ],
   effectors: [
-    eUnit("e-net-1", "net-drone", 5),
-    eUnit("e-net-2", "net-drone", 245),
-    eUnit("e-jam-1", "rf-jammer", 125),
+    eUnit("e-net-1", "net-drone", 300),
+    eUnit("e-net-2", "net-drone", 60),
+    eUnit("e-jam-1", "rf-jammer", 0),
   ],
 };
 
@@ -156,24 +159,25 @@ export const BOSS_2: BossConfig = {
   // The catharsis: solving the matchup puzzle wins it; a blunder is floored to a
   // narrow win, never an outright loss (the sale, not a game-over).
   allowLoss: false,
-  // Same trap, arranged differently: the AUTONOMY sits by the RF-DF + jammer
-  // (both useless on it) and must be reached by a net + radar across the field;
-  // the RF quad by a radar + net should be handed to the RF-DF + jammer, freeing
-  // that net for the autonomy; the low-observable is where a radar + net already
-  // are.
+  // Same trap, arranged differently across the same northern fan: the
+  // low-observable comes straight down the middle (the RF-DF hears it fine, but
+  // the jammer's grip on it is weak — better to net it); the AUTONOMY rides the
+  // eastern radar + net (that net MUST take it — nothing else can); the RF quad
+  // over the western pair should be handed to the jammer across the corridor,
+  // freeing the western net to help the middle.
   threats: [
-    { id: "t1", typeId: "autonomy", label: "Bandit-1", distance: 2.2, bearing: 5 },
-    { id: "t2", typeId: "low-observable", label: "Bandit-2", distance: 2.0, bearing: 125 },
-    { id: "t3", typeId: "rf-quad", label: "Bandit-3", distance: 2.4, bearing: 245 },
+    { id: "t1", typeId: "low-observable", label: "Bandit-1", distance: 2.2, bearing: 0 },
+    { id: "t2", typeId: "autonomy", label: "Bandit-2", distance: 2.0, bearing: 60 },
+    { id: "t3", typeId: "rf-quad", label: "Bandit-3", distance: 2.4, bearing: 300 },
   ],
   sensors: [
-    sUnit("s-radar-1", "radar", 5),
-    sUnit("s-radar-2", "radar", 125),
-    sUnit("s-rfdf-1", "rf-df", 245),
+    sUnit("s-radar-1", "radar", 300),
+    sUnit("s-radar-2", "radar", 60),
+    sUnit("s-rfdf-1", "rf-df", 0),
   ],
   effectors: [
-    eUnit("e-net-1", "net-drone", 5),
-    eUnit("e-net-2", "net-drone", 125),
-    eUnit("e-jam-1", "rf-jammer", 245),
+    eUnit("e-net-1", "net-drone", 300),
+    eUnit("e-net-2", "net-drone", 60),
+    eUnit("e-jam-1", "rf-jammer", 0),
   ],
 };

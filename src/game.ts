@@ -244,7 +244,7 @@ export class Game {
     this.operator.say(
       coordinated
         ? "Hold it there. Same push, same six devices — look how the plan already has the right effector on each."
-        : "Freeze it. Look at what each effector chose to shoot — and the one it passed over, right in its range.",
+        : "Freeze it. Look at what each effector chose to shoot — who's doubled up, what's being wasted, and what nobody is watching.",
       { accent: coordinated },
     );
     this.showDrillFreeze(diags, coordinated);
@@ -404,6 +404,7 @@ export class Game {
     if (s.act === "arcade") {
       this.recDismissed = true;
       this.operator.setSitrep(s.level.name, "arsenal hot · deploy");
+      this.sayOnce("arcade-flanks", "Heads up: that grid was built for the northern corridor. The swarm attacks from everywhere — spend the budget, cover your flanks.");
       this.refreshBuildDock();
       return;
     }
@@ -466,7 +467,7 @@ export class Game {
     if (this.deployGuided === 1) this.operator.say("Sensors find and track. Effectors do the stopping. Keep placing.");
     else if (next && placeableById(next.placeableId)?.kind === "effector" && !this.said.has("first-eff")) {
       this.said.add("first-eff");
-      this.operator.say("Now the shooters — spread them so every approach is covered.");
+      this.operator.say("Now the interceptors — layered in tight around the asset, inside each other's reach. They'll share the same airspace; that's the point.");
     }
     this.refreshDeployDock();
   }
@@ -528,15 +529,15 @@ export class Game {
       this.operator.setSitrep(s.level.name, "raid inbound · systems alone");
       this.operator.say(
         first
-          ? "Raid inbound — they're probing us. Six separate systems, so every effector picks its own target: whatever's nearest ITSELF. Watch the nets service what's on top of them while the leaders slip past. I'll freeze it and walk you through, target by target."
-          : "They're probing again, harder — it worked last time. Still six systems, still no shared picture. Watch the leaders walk in.",
+          ? "Raid inbound down the northern corridor — a loud screen of RF quads with quiet ones riding in behind it. Every unit covers that airspace, but they're six systems with six private pictures: both nets bid on the same lead contact, and the quiet trailers fall off a saturated scope. I'll freeze it and walk you through."
+          : "They're probing again, heavier — same screen-and-trailers profile. It worked last time. Six private pictures, same seams.",
       );
     } else {
       this.operator.setSitrep(s.level.name, "raid inbound · one system");
       this.operator.say(
         first
-          ? "Same raid profile coming back — why change what worked? Except the layer's up now. One fused picture; every effector assigned by URGENCY and matchup — a net for the autonomy, never the jammer. Watch every pass-over from the first raid get answered."
-          : "Coordination holding. Same gear, same raid — right effector on each, leaders first. Nothing through.",
+          ? "Same raid profile coming back — why change what worked? Except the layer's up now. One fused picture: track capacity pooled so the trailers stay held, fire deconflicted so no two effectors waste on one contact, every assignment matched — nets for what the jammer can't touch. Watch it sweep."
+          : "Coordination holding. Same raid, same shared airspace — deconflicted, matched, nothing through.",
         { accent: true },
       );
     }
@@ -600,9 +601,9 @@ export class Game {
       if (s.activeWave.drill) {
         const leaked = s.leaked - this.drillLeaksAtStart;
         if (leaked > 0) {
-          this.operator.say(`${leaked} through. Every unit did its own job — nearest target, every time. The problem is nobody's job was the ones that mattered. The gear could have held this; it needs one plan.`);
+          this.operator.say(`${leaked} through — while two effectors argued over the same lead contact and the quiet ones fell off a saturated scope. Every unit covered that airspace. Six private pictures is what leaked, not the gear.`);
         } else {
-          this.operator.say("Clean sweep — the same six units that leaked before. The gear didn't change; the targeting did. That's the product.", { accent: true });
+          this.operator.say("Clean sweep — the same six units that leaked before. One shared picture, deconflicted fire, right tool on each. That's the product.", { accent: true });
         }
       }
     }

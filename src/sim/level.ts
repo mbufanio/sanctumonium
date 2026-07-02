@@ -59,38 +59,39 @@ const BOSS_2: ScheduleEntry = { type: "boss", bossIndex: 2 };
 // level-agnostic (the lesson is universal); per-site flavour lives in terrain,
 // laydown and the endless arcade act.
 //
-// Each drill is a pair of COLUMNS driven straight down the two net lanes (bearings
-// 120 & 240) — the lanes the effectors actually cover. The kill chain, track
-// capacity and fire-control are the REAL engine (the same code the arcade runs);
-// only the effectors' TARGETING changes between passes:
-//   • Uncoordinated, every effector runs "target nearest" — it locks the tracked
-//     drone physically closest to itself. So a net endlessly re-engages whatever
-//     contact is right on top of it and never turns to the leader that has slipped
-//     PAST it toward the asset (the closest threat to the asset, still in the net's
-//     range). Purely local, threat-blind: it also can't tell that the autonomy in
-//     the column needs the NET specifically (a jammer does nothing to it).
-//   • Coordinated, the plan puts each effector on the most-urgent thing it can
-//     actually kill and holds it — leaders first, right tool on each — clearing
-//     the column.
-// The freeze frame catches exactly this: the net point-blank on a mid-column drone
-// while the leader is ignored. A modest fire-control factor (drills only,
-// engine.DRILL_UNCOORD_HIT — un-cued fire is genuinely rougher) sets the leak
-// magnitude; the WHY on every card is the true geometry above. Same six devices,
-// identical spawns — only the brain changed.
+// Each raid is a concentrated push down the NORTHERN CORRIDOR — the sector the
+// whole laydown overlaps on (see act1Laydown: nets pulled in to a shared core,
+// jammer over the top, sensors bracketing the approach). Because every effector
+// genuinely covers the same airspace, the coordination contrast is HONEST — the
+// engine runs with NO scripted accuracy penalty. What differs between passes is
+// only how the shared airspace is used:
+//   • Uncoordinated ("systems alone"), every effector picks its own target —
+//     whatever's nearest ITSELF — so the two nets bid on the same lead contacts
+//     (verified dog-piles), the jammer burns shots on things it can't kill, the
+//     saturated single-sensor picture drops the trailers, and the leaders that
+//     slip past the crowd are passed over. That's where the leaks come from.
+//   • Coordinated ("one system"), capacity is pooled (the trailers stay held),
+//     fire is deconflicted (no two effectors on one contact), and assignments
+//     are matched (nets for what the jammer can't touch). Same push: clean sweep.
+// The raid SHAPE tells the story too: a loud RF screen up front, autonomy
+// mid-stream, and low-observables trailing quietly behind the noise — the
+// classic decoy-screen profile.
 const DRILL_RADIUS = 4 * HEX_SIZE * Math.sqrt(3); // real approach room to engage across
 
-// Intro (6): two RF columns down the net lanes, an autonomy laced mid-column on
-// the right (the net is the ONLY thing that can kill it — the jammer is useless).
+// Intro raid (8): RF screen, one autonomy mid-stream, two stealth trailers.
+// Uncoordinated leaks the trailers (~1-2); coordinated sweeps (verified 0).
 const DRILL_A: Array<[number, ThreatTypeId, number]> = [
-  [0.5, "rf-quad", 120], [0.85, "autonomy", 120], [1.2, "rf-quad", 120],
-  [0.6, "rf-quad", 240], [0.95, "rf-quad", 240], [1.3, "rf-quad", 240],
+  [0.5, "rf-quad", 345], [0.62, "rf-quad", 15], [0.74, "rf-quad", 0],
+  [0.86, "autonomy", 355], [0.98, "rf-quad", 25], [1.1, "rf-quad", 335],
+  [1.25, "low-observable", 5], [1.4, "low-observable", 350],
 ];
-// The nastier one (6): a low-observable (only the RF-DF holds it) leads the right
-// column, an autonomy the left — two "wrong tool / wrong eyes" threats in the
-// stream. Same clean coordinated sweep; uncoordinated leaks the mis-served ones.
+// The heavier raid (10): denser screen, two autonomy, stealth pair trailing.
+// Uncoordinated leaks ~2-3 across the failure modes; coordinated sweeps.
 const DRILL_B: Array<[number, ThreatTypeId, number]> = [
-  [0.5, "rf-quad", 120], [0.85, "low-observable", 120], [1.2, "rf-quad", 120],
-  [0.6, "autonomy", 240], [0.95, "rf-quad", 240], [1.3, "rf-quad", 240],
+  [0.5, "rf-quad", 340], [0.6, "rf-quad", 5], [0.7, "rf-quad", 20],
+  [0.8, "autonomy", 350], [0.9, "rf-quad", 10], [1.0, "autonomy", 330],
+  [1.15, "rf-quad", 0], [1.3, "low-observable", 15], [1.45, "low-observable", 355],
+  [1.6, "rf-quad", 345],
 ];
 
 // Act-1 fiction (the coherent version of the industry's real problem): the site
@@ -122,10 +123,11 @@ const MILITARY: LevelDef = {
   startBudget: 120,
   integrity: 100,
   leakScorePenalty: 0,
-  // Mixed terrain: a couple of structures (blockers) and a fire-inhibit zone.
+  // Mixed terrain: a couple of structures (blockers) and a fire-inhibit zone —
+  // placed clear of the fixed Act-1 laydown hexes (northern corridor).
   terrain: [
     ...cells(hexCluster({ q: -3, r: 3 }, 1), "blocker"),
-    ...cells(hexCluster({ q: 4, r: -3 }, 1), "blocker"),
+    ...cells(hexCluster({ q: 5, r: -1 }, 1), "blocker"),
     ...cells(hexLine({ q: -5, r: -1 }, { q: -2, r: -3 }), "nofire"),
   ],
   restrictedPlaceables: [],
@@ -147,10 +149,11 @@ const AIRPORT: LevelDef = {
   startBudget: 140,
   integrity: 100,
   leakScorePenalty: 140,
-  // Two runways crossing the field — no-fire zones you can't engage across.
+  // Two parallel runways south of the tower — no-fire zones you can't engage
+  // across, kept clear of the fixed Act-1 laydown (northern corridor).
   terrain: [
     ...cells(hexLine({ q: -8, r: 6 }, { q: 8, r: -2 }), "nofire"),
-    ...cells(hexLine({ q: -8, r: 2 }, { q: 8, r: -6 }), "nofire"),
+    ...cells(hexLine({ q: -8, r: 10 }, { q: 8, r: 2 }), "nofire"),
   ],
   restrictedPlaceables: [],
   schedule: act1DrillSchedule(),
@@ -218,27 +221,34 @@ export interface LaydownItem {
 /**
  * The FIXED Act-1 laydown (the scripted-demo redesign). Act 1 proves the brain,
  * not the budget, so the gear is the SAME from wave 1 through Boss #2 — only
- * coordination changes. A deliberately rich grid: several radars (for track
- * FUSION and hand-off between them), an RF-DF (the only thing that classifies a
- * non-emitting drone), and a ring of net-drones + jammers (whose magazines and
- * reloads coordination staggers). Spread 360° on overlapping rings. The
- * controller filters any hex blocked by a site's terrain.
+ * coordination changes. Two radars (track FUSION and hand-off), an RF-DF (the
+ * only thing that hears a non-emitting drone is nothing — its blind spot IS the
+ * lesson), two net-drones and a jammer whose coverages genuinely overlap on the
+ * northern corridor. The controller filters any hex blocked by a site's terrain.
  */
 export function act1Laydown(level: LevelDef): LaydownItem[] {
-  const sensorRing = hexRing(3); // 18 cells
-  const effRing = hexRing(2); // 12 cells
+  const coreRing = hexRing(1); // 6 cells, radius ~66 — the interceptor core
+  const midRing = hexRing(2); // 12 cells, radius ~132
+  const sensorRing = hexRing(3); // 18 cells, radius ~198 — the sensor picket
   const out: LaydownItem[] = [];
-  // A deliberately SMALL, legible grid (6 devices) so the coordination drills
-  // read clearly: two radars whose coverage overlaps (they can end up tracking
-  // the SAME drone) plus an RF-DF; two net-drones that can both reach a central
-  // target (they can DOGPILE) plus a jammer. Placement order interleaves sensors
-  // and effectors so the guided deploy teaches "eyes then shooters".
-  const sensors: Array<[number, string]> = [[0, "radar"], [6, "radar"], [12, "rf-df"]];
+  // A deliberately SMALL, legible grid (6 devices) laid out as DEFENSE IN DEPTH
+  // around the northern corridor, so the effectors' coverage genuinely OVERLAPS:
+  //   • sensors out wide bracketing the approach — radar NW (~300°), radar NE
+  //     (~60°), the passive RF-DF dead north (0°);
+  //   • both net-drones pulled IN to the core ring (~66 out) where each covers
+  //     the centre AND the other's zone — in shared airspace they can genuinely
+  //     bid on the same contact (the honest dog-pile) or split the work;
+  //   • the jammer on the mid ring due north, its long reach blanketing the
+  //     whole corridor over the top of both nets.
+  // Every drill pushes into that shared zone, so the coordination contrast is
+  // real geometry, not scripting. Placement order stays sensors-then-effectors
+  // (the guided deploy teaches "eyes then shooters").
+  const sensors: Array<[number, string]> = [[15, "radar"], [9, "radar"], [12, "rf-df"]];
   for (const [idx, id] of sensors) out.push({ placeableId: id, hex: sensorRing[idx % sensorRing.length] });
-  const effectors: Array<[number, string]> = [[0, "net-drone"], [4, "net-drone"], [8, "rf-jammer"]];
-  for (const [idx, id] of effectors) {
-    if (level.restrictedPlaceables.includes(id)) continue;
-    out.push({ placeableId: id, hex: effRing[idx % effRing.length] });
+  out.push({ placeableId: "net-drone", hex: coreRing[5] }); // ~300°
+  out.push({ placeableId: "net-drone", hex: coreRing[3] }); // ~60°
+  if (!level.restrictedPlaceables.includes("rf-jammer")) {
+    out.push({ placeableId: "rf-jammer", hex: midRing[8] }); // 0°
   }
   return out;
 }

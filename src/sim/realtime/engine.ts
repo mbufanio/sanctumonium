@@ -30,9 +30,6 @@ const UNTRACKED_PENALTY = 0.2;
 
 /** Coordinated shots are more reliable (fused tracks + timing), capped below 1. */
 const COORD_ACCURACY = 1.25;
-/** DRILL only: uncoordinated fire, with no fused fire-control cueing, is ragged —
- *  a scripted penalty so the value of coordination reads clearly in the demo. */
-const DRILL_UNCOORD_HIT = 0.45;
 
 // ---- kill chain (spec: detect → classify/ID → track → engage) ------------
 /** Classification confidence needed for a fire-control track. */
@@ -167,12 +164,13 @@ export function stepWave(
       trackSlots.set(d.id, caps.map((c) => c.s)); // every capable sensor fuses this one track
     }
   } else if (env.drill) {
-    // Drill bias (honest scripting, drills only): each sensor redundantly locks
-    // its own nearest capable drones AND, with no coordinator to re-task freed
-    // capacity, a drone once dropped is written off for good — never re-acquired.
-    // So a concentrated push saturates the un-managed picture and the overflow
-    // stays unwatched all the way in. The real capacity mechanic, just held to
-    // its worst case so the failure is legible.
+    // Drills only: same finite-capacity mechanic as below, held to its honest
+    // WORST case — each sensor redundantly locks its own nearest capable drones
+    // AND, with no coordinator to re-task freed capacity, a drone once dropped
+    // is written off for good (never re-acquired). A concentrated push
+    // saturates the un-managed picture and the trailers stay unwatched all the
+    // way in. This is the only drill-specific behavior in the engine; the shot
+    // dice are identical to the arcade.
     for (const s of sensors) {
       let held = 0;
       for (const d of byDanger) {
@@ -262,11 +260,10 @@ export function stepWave(
   const resolveHit = (e: PlacedDevice, d: Drone): boolean => {
     let p = hitChance(e.effect[d.typeId], d.tracked);
     if (env.coordinated && p > 0) p = Math.min(0.98, p * COORD_ACCURACY);
-    // Drill bias (drills only): without a fused fire-control picture handing each
-    // shooter a clean, deconflicted solution, uncoordinated fire is ragged — it
-    // hits far less often. This is the scripted thumb on the scale that makes the
-    // outcome legible; the arcade never sees it.
-    else if (env.drill && p > 0) p *= DRILL_UNCOORD_HIT;
+    // No drill-only accuracy penalty: the coordination gap in the drills comes
+    // entirely from real geometry — overlapping effectors bidding on the same
+    // contacts, mismatch waste, saturated single-sensor pictures dropping the
+    // trailers. Same dice as the arcade.
     if (!rng.chance(p)) return false;
     d.hp -= 1;
     if (d.hp <= 0) {
