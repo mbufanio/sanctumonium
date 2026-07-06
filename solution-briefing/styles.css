@@ -1,0 +1,211 @@
+/* ================================================================= */
+/*  BRAND CONFIG  —  change these values to rebrand the whole deck.   */
+/*  Every color, font, and size below flows from these variables.    */
+/*  You almost never need to edit anything outside this block for    */
+/*  simple rebrands.                                                  */
+/* ================================================================= */
+:root {
+  /* --- COLORS --- */
+  --brand-primary:  #0b1e2d;   /* main background (dark navy)        */
+  --brand-surface:  #12293b;   /* card / panel background            */
+  --brand-accent:   #35e0c8;   /* highlight color (buttons, bars)    */
+  --brand-accent-2: #4f9cff;   /* secondary highlight                */
+  --brand-text:     #eaf2f7;   /* main text color                    */
+  --brand-muted:    #8fa8ba;   /* dimmed / caption text              */
+  --brand-line:     #244056;   /* borders and dividers               */
+
+  /* --- FONTS --- */
+  /* To use a custom font, add an @font-face block below the config   */
+  /* and put its name first in the list.                              */
+  --font-heading: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-body:    "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+  /* --- SIZES (change one number to scale a whole class of text) --- */
+  --size-cover-title:   clamp(3rem, 9vw, 7rem);
+  --size-headline:      clamp(2rem, 5vw, 3.6rem);
+  --size-section-title: clamp(1.6rem, 3.5vw, 2.8rem);
+  --size-body:          clamp(1rem, 1.6vw, 1.35rem);
+  --size-eyebrow:       0.85rem;
+}
+
+/* ---- EXAMPLE custom font (uncomment and drop the file in assets/) --
+@font-face {
+  font-family: "MyBrandFont";
+  src: url("assets/MyBrandFont.woff2") format("woff2");
+  font-weight: 400 800;
+}
+   then set:  --font-heading: "MyBrandFont", sans-serif;
+------------------------------------------------------------------- */
+
+
+/* ================================================================= */
+/*  DECK FRAMEWORK  —  layout & slide plumbing.                       */
+/*  You rarely need to touch anything below this line.               */
+/* ================================================================= */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--brand-primary);
+  color: var(--brand-text);
+  font-family: var(--font-body);
+  font-size: var(--size-body);
+  overflow: hidden;
+}
+
+#deck { height: 100vh; width: 100vw; position: relative; }
+
+/* Each slide fills the screen; only the active one is shown. */
+.slide {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 6vh 8vw;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(79,156,255,0.12), transparent 60%),
+    radial-gradient(900px 500px at 0% 110%, rgba(53,224,200,0.10), transparent 55%),
+    var(--brand-primary);
+  overflow: hidden;
+}
+.slide.is-active { display: flex; animation: slideIn 0.5s ease both; }
+@keyframes slideIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+.slide-body { width: 100%; max-width: 1100px; position: relative; z-index: 2; }
+
+/* Animated "sensor sweep" backdrop shared by every slide. */
+.slide::before {
+  content: "";
+  position: absolute; inset: 0; z-index: 0; opacity: 0.5;
+  background-image:
+    linear-gradient(var(--brand-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--brand-line) 1px, transparent 1px);
+  background-size: 60px 60px;
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 0%, transparent 70%);
+          mask-image: radial-gradient(circle at 50% 50%, #000 0%, transparent 70%);
+  animation: sweep 14s linear infinite;
+}
+@keyframes sweep { from { background-position: 0 0; } to { background-position: 60px 60px; } }
+
+/* Background video + darkening scrim. */
+.slide-bg-video {
+  position: absolute; inset: 0; z-index: 0;
+  width: 100%; height: 100%; object-fit: cover;
+}
+.slide-bg-scrim {
+  position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(11,30,45,0.55), rgba(11,30,45,0.88));
+}
+
+/* ---- shared text elements ---- */
+.eyebrow {
+  font-size: var(--size-eyebrow); letter-spacing: 0.28em; text-transform: uppercase;
+  color: var(--brand-accent); font-weight: 700; margin-bottom: 1rem;
+}
+.section-title { font-family: var(--font-heading); font-size: var(--size-section-title); line-height: 1.1; margin-bottom: 2.2rem; }
+.accent { color: var(--brand-accent); }
+
+/* ---- SLIDE 1 & 8: COVER / CLOSE ---- */
+.cover-body { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+.cover-logo { width: 84px; height: 84px; margin-bottom: 1.4rem; }
+.cover-kicker { letter-spacing: 0.32em; text-transform: uppercase; color: var(--brand-muted); font-weight: 700; font-size: 0.9rem; }
+.cover-title { font-family: var(--font-heading); font-size: var(--size-cover-title); font-weight: 800; line-height: 0.95; letter-spacing: -0.02em; }
+.cover-tagline { font-size: clamp(1.1rem, 2.2vw, 1.6rem); color: var(--brand-text); max-width: 34ch; margin: 0.6rem auto 0; }
+.cover-presenter { color: var(--brand-muted); margin-top: 1.6rem; font-size: 1rem; }
+.close-title { font-family: var(--font-heading); font-size: var(--size-headline); font-weight: 800; margin: 0.5rem 0; }
+.close-sub { color: var(--brand-text); font-size: 1.25rem; }
+.close-contact { color: var(--brand-accent); margin: 1.4rem 0 0.6rem; font-size: 1.05rem; }
+
+/* ---- SLIDE 2: STATEMENT ---- */
+.statement-headline { font-family: var(--font-heading); font-size: var(--size-headline); line-height: 1.08; max-width: 20ch; margin-bottom: 1.2rem; }
+.statement-sub { font-size: 1.3rem; color: var(--brand-muted); max-width: 52ch; margin-bottom: 2.6rem; }
+.stat-row { list-style: none; display: flex; gap: 3rem; flex-wrap: wrap; }
+.stat { display: flex; flex-direction: column; }
+.stat-value { font-family: var(--font-heading); font-size: 3rem; font-weight: 800; color: var(--brand-accent); line-height: 1; }
+.stat-label { color: var(--brand-muted); max-width: 22ch; margin-top: 0.4rem; }
+
+/* ---- SLIDE 3: CARDS ---- */
+.card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; }
+.card { background: var(--brand-surface); border: 1px solid var(--brand-line); border-radius: 16px; padding: 2rem 1.6rem; }
+.card-icon { font-size: 2.4rem; color: var(--brand-accent); margin-bottom: 0.8rem; }
+.card-title { font-family: var(--font-heading); font-size: 1.5rem; margin-bottom: 0.6rem; }
+.card-text { color: var(--brand-muted); }
+
+/* ---- SLIDE 4: FLOW DIAGRAM ---- */
+.flow { display: flex; align-items: stretch; gap: 1rem; }
+.flow-node { flex: 1; background: var(--brand-surface); border: 1px solid var(--brand-line); border-radius: 16px; padding: 1.8rem 1.4rem; }
+.flow-node .flow-num { color: var(--brand-accent); font-weight: 800; letter-spacing: 0.1em; }
+.flow-node h3 { font-family: var(--font-heading); font-size: 1.5rem; margin: 0.4rem 0 0.6rem; }
+.flow-node p { color: var(--brand-muted); }
+.flow-arrow { display: flex; align-items: center; font-size: 2rem; color: var(--brand-accent); }
+
+/* ---- SLIDE 5: PROOF ---- */
+.kpi-row { display: flex; gap: 2.5rem; margin-bottom: 2.4rem; flex-wrap: wrap; }
+.kpi { display: flex; flex-direction: column; }
+.kpi-value { font-family: var(--font-heading); font-size: 3.2rem; font-weight: 800; color: var(--brand-accent); line-height: 1; }
+.kpi-label { color: var(--brand-muted); max-width: 20ch; margin-top: 0.4rem; }
+.bars { display: flex; align-items: flex-end; gap: 2.4rem; height: 220px; padding-left: 0.5rem; }
+.bar { width: 130px; height: var(--h); background: var(--brand-line); border-radius: 10px 10px 0 0; position: relative; display: flex; align-items: flex-start; justify-content: center; min-height: 30px; transition: height 0.6s ease; }
+.bar--accent { background: linear-gradient(180deg, var(--brand-accent), var(--brand-accent-2)); }
+.bar-cap { position: absolute; top: -1.8rem; font-family: var(--font-heading); font-weight: 800; font-size: 1.2rem; }
+.bar-label { position: absolute; bottom: -1.8rem; color: var(--brand-muted); font-size: 0.9rem; white-space: nowrap; }
+
+/* ---- SLIDE 6: TABLE ---- */
+.compare { width: 100%; border-collapse: collapse; font-size: 1.15rem; }
+.compare th, .compare td { text-align: left; padding: 1rem 1.2rem; border-bottom: 1px solid var(--brand-line); }
+.compare thead th { color: var(--brand-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.85rem; }
+.compare .col-accent { color: var(--brand-accent); font-weight: 700; }
+.compare thead .col-accent { color: var(--brand-accent); }
+
+/* ---- SLIDE 7: USE-CASE TILES ---- */
+.tile-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.2rem; }
+.tile { background: var(--brand-surface); border: 1px solid var(--brand-line); border-left: 4px solid var(--brand-accent); border-radius: 12px; padding: 1.4rem 1.6rem; }
+.tile h3 { font-family: var(--font-heading); font-size: 1.4rem; margin-bottom: 0.3rem; }
+.tile p { color: var(--brand-muted); }
+
+/* ---- STAGGERED ENTRANCE (elements with class "fragment") ---- */
+/* Hidden until their slide is active, then they animate in one after      */
+/* another. Add class "fragment" to anything you want to animate in.       */
+.fragment { opacity: 0; transform: translateY(12px); }
+.slide.is-active .fragment { animation: fragIn 0.55s ease forwards; }
+@keyframes fragIn { to { opacity: 1; transform: none; } }
+/* the stagger — each successive element in a group waits a little longer */
+.slide.is-active .fragment:nth-child(1) { animation-delay: 0.10s; }
+.slide.is-active .fragment:nth-child(2) { animation-delay: 0.20s; }
+.slide.is-active .fragment:nth-child(3) { animation-delay: 0.30s; }
+.slide.is-active .fragment:nth-child(4) { animation-delay: 0.40s; }
+.slide.is-active .fragment:nth-child(5) { animation-delay: 0.50s; }
+.slide.is-active .fragment:nth-child(6) { animation-delay: 0.60s; }
+.slide.is-active .fragment:nth-child(7) { animation-delay: 0.70s; }
+.slide.is-active .fragment:nth-child(8) { animation-delay: 0.80s; }
+
+/* ---- NAVIGATION UI ---- */
+#ui { position: fixed; bottom: 22px; right: 24px; z-index: 50; display: flex; align-items: center; gap: 10px; }
+#ui button { background: var(--brand-surface); color: var(--brand-text); border: 1px solid var(--brand-line); width: 40px; height: 40px; border-radius: 10px; font-size: 1.2rem; cursor: pointer; }
+#ui button:hover { border-color: var(--brand-accent); color: var(--brand-accent); }
+#counter { color: var(--brand-muted); font-size: 0.9rem; min-width: 54px; text-align: center; }
+#progress { position: fixed; top: 0; left: 0; height: 3px; background: var(--brand-accent); width: 0; z-index: 50; transition: width 0.4s ease; }
+
+/* ================================================================= */
+/*  PRINT / PDF EXPORT  —  one slide per page.                        */
+/*  Triggered by the browser's Print dialog (Ctrl/Cmd+P).            */
+/* ================================================================= */
+@media print {
+  @page { size: 1280px 720px; margin: 0; }
+  html, body { overflow: visible; height: auto; }
+  #ui, #progress { display: none !important; }
+  #deck { height: auto; }
+  .slide {
+    display: flex !important;
+    position: relative;
+    inset: auto;
+    width: 1280px; height: 720px;
+    page-break-after: always;
+    break-after: page;
+    animation: none;
+  }
+  .slide::before { animation: none; }
+  .slide-bg-video { display: none; }   /* video can't print — poster/scrim shows */
+  .fragment { opacity: 1 !important; transform: none !important; animation: none !important; }
+}

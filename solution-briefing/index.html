@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- ============================================================= -->
+  <!--  BROWSER TAB TITLE  —  change to your company / deck name     -->
+  <!-- ============================================================= -->
+  <title>NORTHWIND DEFENSE — Solution Briefing</title>
+
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="assets/logo.svg" />
+</head>
+
+<body>
+<!-- ================================================================= -->
+<!--  THE DECK                                                         -->
+<!--  Each <section class="slide"> is ONE slide.                       -->
+<!--  To reorder slides, move the whole <section>...</section> block.  -->
+<!--  To delete a slide, delete its <section>...</section> block.      -->
+<!--  To add a slide, copy an existing <section> and edit its text.    -->
+<!-- ================================================================= -->
+<main id="deck">
+
+  <!-- ============================================================= -->
+  <!--  SLIDE 1 — COVER                                              -->
+  <!-- ============================================================= -->
+  <section class="slide slide--cover" data-slide="1">
+
+    <!-- BACKGROUND VIDEO (optional).                                -->
+    <!-- Drop a file at assets/cover-bg.mp4 and it plays here.       -->
+    <!-- If the file is missing, the animated backdrop below shows.  -->
+    <video class="slide-bg-video" autoplay muted loop playsinline poster="assets/cover-poster.jpg">
+      <source src="assets/cover-bg.mp4" type="video/mp4" />
+    </video>
+    <div class="slide-bg-scrim"></div>
+
+    <div class="slide-body cover-body">
+      <img class="cover-logo" src="assets/logo.svg" alt="Company logo" />
+
+      <!-- COMPANY NAME -->
+      <p class="cover-kicker">NORTHWIND DEFENSE</p>
+
+      <!-- PRODUCT / DECK TITLE -->
+      <h1 class="cover-title">AEGIS-1<span class="accent">.</span></h1>
+
+      <!-- TAGLINE -->
+      <p class="cover-tagline">Coordinated counter-UAS. One intelligence, every effector.</p>
+
+      <!-- PRESENTER LINE -->
+      <p class="cover-presenter">Solution Briefing &nbsp;·&nbsp; Presented by [Presenter Name]</p>
+    </div>
+  </section>
+
+
+  <!-- ============================================================= -->
+  <!--  SLIDE 2 — THE PROBLEM  (big statement + stat callouts)       -->
+  <!-- ============================================================= -->
+  <section class="slide slide--statement" data-slide="2">
+    <div class="slide-bg-scrim"></div>
+    <div class="slide-body">
+      <p class="eyebrow">The Problem</p>
+
+      <!-- HEADLINE -->
+      <h2 class="statement-headline">
+        A pile of counter-drone devices is <span class="accent">not a system.</span>
+      </h2>
+
+      <!-- SUPPORTING SENTENCE -->
+      <p class="statement-sub">
+        Threats arrive faster, cheaper, and in greater numbers than any single
+        operator can assign, deconflict, and adapt to by hand.
+      </p>
+
+      <!-- STAT CALLOUTS — one <li> per stat -->
+      <ul class="stat-row">
+        <li class="stat fragment">
+          <span class="stat-value">3&times;</span>
+          <span class="stat-label">annual growth in incursion reports</span>
+        </li>
+        <li class="stat fragment">
+          <span class="stat-value">&lt;90s</span>
+          <span class="stat-label">from detection to impact</span>
+        </li>
+        <li class="stat fragment">
+          <span class="stat-value">6+</span>
+          <span class="stat-label">sensor / effector types to coordinate</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+
+  <!-- ============================================================= -->
+  <!--  SLIDE 3 — SOLUTION OVERVIEW  (three feature cards)           -->
+  <!-- ============================================================= -->
+  <section class="slide slide--cards" data-slide="3">
+    <div class="slide-body">
+      <p class="eyebrow">The Solution</p>
+      <h2 class="section-title">One coordinating intelligence</h2>
+
+      <div class="card-grid">
+        <!-- CARD 1 -->
+        <article class="card fragment">
+          <div class="card-icon">◎</div>
+          <h3 class="card-title">Place</h3>
+          <p class="card-text">
+            Reads the site and recommends where every sensor and effector
+            should go for full 360° coverage.
+          </p>
+        </article>
+
+        <!-- CARD 2 -->
+        <article class="card fragment">
+          <div class="card-icon">⇄</div>
+          <h3 class="card-title">Assign</h3>
+          <p class="card-text">
+            Matches the right effector to each threat in real time and
+            deconflicts fire so nothing is wasted or double-engaged.
+          </p>
+        </article>
+
+        <!-- CARD 3 -->
+        <article class="card fragment">
+          <div class="card-icon">↻</div>
+          <h3 class="card-title">Adapt</h3>
+          <p class="card-text">
+            Learns the threat's approach and re-tasks the layout wave over
+            wave — the site gets smarter as the fight goes on.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================= -->
+  <!--  SLIDE 4 — HOW IT WORKS  (diagram)                            -->
+  <!-- ============================================================= -->
+  <section class="slide slide--diagram" data-slide="4">
+    <div class="slide-body">
+      <p class="eyebrow">How It Works</p>
+      <h2 class="section-title">Sense &rarr; Decide &rarr; Act, in one loop</h2>
+
+      <!-- DIAGRAM — three boxes joined by arrows. Edit the text in each box. -->
+      <div class="flow">
+        <div class="flow-node fragment">
+          <span class="flow-num">01</span>
+          <h3>Sense</h3>
+          <p>Radar, RF-DF, and EO/IR feeds fuse into one track picture.</p>
+        </div>
+        <div class="flow-arrow fragment">&rarr;</div>
+        <div class="flow-node fragment">
+          <span class="flow-num">02</span>
+          <h3>Decide</h3>
+          <p>The brain scores every effector-vs-threat matchup and picks the optimal assignment.</p>
+        </div>
+        <div class="flow-arrow fragment">&rarr;</div>
+        <div class="flow-node fragment">
+          <span class="flow-num">03</span>
+          <h3>Act</h3>
+          <p>Effectors engage on command, deconflicted, with the odds shown live.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================= -->
+  <!--  SLIDE 5 — PROOF  (KPI tiles + simple bar chart)              -->
+  <!-- ============================================================= -->
+  <section class="slide slide--proof" data-slide="5">
+    <div class="slide-body">
+      <p class="eyebrow">The Proof</p>
+      <h2 class="section-title">Coordination wins, measurably</h2>
+
+      <!-- KPI TILES -->
+      <div class="kpi-row">
+        <div class="kpi fragment"><span class="kpi-value">98%</span><span class="kpi-label">threats neutralized (coordinated)</span></div>
+        <div class="kpi fragment"><span class="kpi-value">3.5&times;</span><span class="kpi-label">score vs. brute-force spam</span></div>
+        <div class="kpi fragment"><span class="kpi-value">0</span><span class="kpi-label">leaks at the protected asset</span></div>
+      </div>
+
+      <!-- SIMPLE BAR CHART — each bar's height is set by its style="--h: NN%". -->
+      <div class="bars">
+        <div class="bar fragment" style="--h: 34%"><span class="bar-cap">34</span><span class="bar-label">Uncoordinated</span></div>
+        <div class="bar fragment" style="--h: 58%"><span class="bar-cap">58</span><span class="bar-label">Manual assign</span></div>
+        <div class="bar bar--accent fragment" style="--h: 100%"><span class="bar-cap">100</span><span class="bar-label">AEGIS-1</span></div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================= -->
+  <!--  SLIDE 6 — COMPARISON  (table)                                -->
+  <!-- ============================================================= -->
+  <section class="slide slide--table" data-slide="6">
+    <div class="slide-body">
+      <p class="eyebrow">Why Us</p>
+      <h2 class="section-title">Legacy stack vs. AEGIS-1</h2>
+
+      <!-- COMPARISON TABLE — edit the text in each <td>. -->
+      <table class="compare">
+        <thead>
+          <tr><th>Capability</th><th>Legacy point solutions</th><th class="col-accent">AEGIS-1</th></tr>
+        </thead>
+        <tbody>
+          <tr class="fragment"><td>Effector-to-threat assignment</td><td>Manual, operator-limited</td><td class="col-accent">Automatic, optimal</td></tr>
+          <tr class="fragment"><td>Fire deconfliction</td><td>None</td><td class="col-accent">Built in</td></tr>
+          <tr class="fragment"><td>Adapts to the threat</td><td>Static</td><td class="col-accent">Wave over wave</td></tr>
+          <tr class="fragment"><td>Setup time</td><td>Days</td><td class="col-accent">Guided, minutes</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <!-- ============================================================= -->
+  <!--  SLIDE 7 — USE CASES  (scenario grid)                         -->
+  <!-- ============================================================= -->
+  <section class="slide slide--usecases" data-slide="7">
+    <div class="slide-body">
+      <p class="eyebrow">Where It Runs</p>
+      <h2 class="section-title">One system, every site</h2>
+
+      <div class="tile-grid">
+        <div class="tile fragment"><h3>Forward Operating Base</h3><p>Balanced defense, 360° coverage.</p></div>
+        <div class="tile fragment"><h3>International Airport</h3><p>Zero-tolerance airspace, no shutdowns.</p></div>
+        <div class="tile fragment"><h3>Power Substation</h3><p>Fragile high-value asset, jam-resistant threats.</p></div>
+        <div class="tile fragment"><h3>Stadium · Event Day</h3><p>Dense swarms, area effectors shine.</p></div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================= -->
+  <!--  SLIDE 8 — CLOSE  (call to action + contact)                 -->
+  <!-- ============================================================= -->
+  <section class="slide slide--close" data-slide="8">
+    <div class="slide-bg-scrim"></div>
+    <div class="slide-body cover-body">
+      <img class="cover-logo" src="assets/logo.svg" alt="Company logo" />
+      <h2 class="close-title">Let's defend your airspace.</h2>
+      <p class="close-sub">See AEGIS-1 live at your site.</p>
+
+      <!-- CONTACT LINE -->
+      <p class="close-contact">
+        [Presenter Name] &nbsp;·&nbsp; sales@northwind.example &nbsp;·&nbsp; +1 (555) 010-2040
+      </p>
+      <p class="cover-kicker">NORTHWIND DEFENSE</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- ================================================================= -->
+<!--  NAVIGATION UI  (do not edit — the buttons and counter)           -->
+<!-- ================================================================= -->
+<div id="ui">
+  <button id="prev" aria-label="Previous slide">‹</button>
+  <span id="counter">1 / 8</span>
+  <button id="next" aria-label="Next slide">›</button>
+  <button id="full" aria-label="Fullscreen">⛶</button>
+</div>
+<div id="progress"></div>
+
+<script src="deck.js"></script>
+</body>
+</html>

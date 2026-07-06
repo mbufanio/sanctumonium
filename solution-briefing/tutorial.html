@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Solution Briefing — Rebranding Tutorial</title>
+<style>
+  :root {
+    --ink: #1a2733; --muted: #5b6b7a; --accent: #0e7c86; --accent2: #b8f0e8;
+    --line: #d7e0e6; --code-bg: #0f2233; --code-ink: #e6f0f5; --warn-bg: #fff6e6;
+    --warn-line: #e8b04b; --tip-bg: #e9f7f4; --tip-line: #35b8a6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink); line-height: 1.5; margin: 0;
+    font-size: 10.5pt;
+  }
+  .page { max-width: 760px; margin: 0 auto; padding: 0 8mm; }
+
+  /* cover */
+  .cover { text-align: center; padding: 40mm 8mm 0; page-break-after: always; }
+  .cover .badge { display:inline-block; letter-spacing:.28em; text-transform:uppercase;
+    color: var(--accent); font-weight:700; font-size: 10pt; border:1px solid var(--line);
+    padding: 6px 14px; border-radius: 20px; }
+  .cover h1 { font-size: 30pt; margin: 18px 0 6px; line-height:1.1; }
+  .cover .sub { color: var(--muted); font-size: 13pt; max-width: 30em; margin: 0 auto; }
+  .cover .meta { margin-top: 26px; color: var(--muted); font-size: 10pt; }
+
+  h2.part { font-size: 17pt; margin: 0 0 4px; padding-top: 6mm;
+    border-top: 3px solid var(--accent); color: var(--ink); page-break-before: always; }
+  h2.part .n { color: var(--accent); }
+  h3 { font-size: 12.5pt; margin: 18px 0 6px; }
+  h4 { font-size: 11pt; margin: 14px 0 4px; color: var(--ink); }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  a { color: var(--accent); }
+  strong { color: var(--ink); }
+
+  code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    background: #eef3f6; padding: 1px 5px; border-radius: 4px; font-size: 9.4pt; color:#0b3a44; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 12px 14px;
+    border-radius: 8px; overflow-x: auto; font-size: 9pt; line-height: 1.45;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    white-space: pre-wrap; word-break: break-word; }
+  pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+  .hl { color: #7ff0dc; }        /* highlighted token in code */
+  .cm { color: #8aa0b0; }        /* comment in code */
+
+  .callout { border-left: 4px solid var(--tip-line); background: var(--tip-bg);
+    padding: 8px 14px; border-radius: 0 6px 6px 0; margin: 12px 0; }
+  .callout.warn { border-color: var(--warn-line); background: var(--warn-bg); }
+  .callout .lab { font-weight: 700; text-transform: uppercase; font-size: 8.5pt;
+    letter-spacing: .12em; color: var(--accent); }
+  .callout.warn .lab { color: #a8751a; }
+
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 9.6pt; }
+  th, td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #eef3f6; }
+  td code { white-space: nowrap; }
+
+  .step { display:flex; gap:10px; margin: 8px 0; }
+  .step .num { flex:0 0 22px; height:22px; background: var(--accent); color:#fff;
+    border-radius:50%; text-align:center; font-weight:700; font-size:9pt; line-height:22px; }
+  .fileref { font-family: "SFMono-Regular", Consolas, monospace; font-size: 9pt;
+    background:#0f2233; color:#b8f0e8; padding:2px 7px; border-radius:5px; }
+
+  .toc { columns: 2; column-gap: 26px; font-size: 10pt; }
+  .toc a { text-decoration: none; color: var(--ink); }
+  .toc .p { color: var(--accent); font-weight:700; }
+
+  /* one-pager */
+  .onepager h2.part { color: #0b3a44; }
+  .cheat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cheat .box { border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .cheat .box h4 { margin: 0 0 6px; color: var(--accent); }
+  .cheat pre { font-size: 8pt; padding: 8px 10px; }
+
+  @page { size: Letter; margin: 16mm 0; }
+  @media print { .page { max-width: none; } }
+</style>
+</head>
+<body>
+
+<!-- ===================== COVER ===================== -->
+<div class="cover">
+  <span class="badge">Solution Briefing</span>
+  <h1>Rebranding &amp; Editing Tutorial</h1>
+  <p class="sub">How to turn the example web deck into your company's briefing —
+    step by step, slide by slide, with the exact code to change and where to find it.</p>
+  <p class="meta">For the <code>solution-briefing/</code> web deck &nbsp;·&nbsp; No coding experience assumed</p>
+</div>
+
+<div class="page">
+
+<!-- ===================== ORIENTATION ===================== -->
+<h2 class="part"><span class="n">0.</span> Before you start — the 3 files that matter</h2>
+<p>The whole deck is just three text files plus a folder of images. You can edit
+all of them in any plain-text editor — <strong>VS Code</strong> (free) is ideal,
+but even Notepad/TextEdit works. Open the <code>solution-briefing</code> folder and you'll see:</p>
+
+<table>
+  <tr><th>File</th><th>What lives here</th><th>How often you'll touch it</th></tr>
+  <tr><td><span class="fileref">index.html</span></td><td>All slide <strong>text and content</strong> — one <code>&lt;section&gt;</code> block per slide</td><td>Every content change</td></tr>
+  <tr><td><span class="fileref">styles.css</span></td><td>All <strong>colors, fonts, and sizes</strong> — the brand config is at the very top</td><td>Once, to set your brand</td></tr>
+  <tr><td><span class="fileref">deck.js</span></td><td>The navigation engine (arrow keys)</td><td>Never — leave it alone</td></tr>
+  <tr><td><span class="fileref">assets/</span></td><td>Your <strong>logo, images, and videos</strong></td><td>When swapping pictures</td></tr>
+</table>
+
+<div class="callout">
+  <span class="lab">How to preview your changes</span>
+  <p style="margin:4px 0 0">Double-click <code>index.html</code> to open the deck in your browser.
+  After each edit, <strong>save the file and press the browser's Refresh</strong> (F5) to see it.
+  Keep the editor and browser side by side — edit, save, refresh, repeat.</p>
+</div>
+
+<h3>The golden rule for text edits</h3>
+<p>In <code>index.html</code>, your text sits <em>between</em> tags like
+<code>&lt;h1&gt;</code> and <code>&lt;/h1&gt;</code>. To change wording, edit only
+the words between the tags — never delete the <code>&lt;...&gt;</code> tags themselves.</p>
+<pre><code><span class="cm">&lt;!-- change the words, keep the tags --&gt;</span>
+&lt;h1 class="cover-title"&gt;<span class="hl">AEGIS-1</span>&lt;/h1&gt;
+                       <span class="cm">↑ edit this part only</span></code></pre>
+
+<!-- ===================== PART 1: GLOBAL REBRAND ===================== -->
+<h2 class="part"><span class="n">1.</span> The 15-minute global rebrand</h2>
+<p>Do these four things once and 80% of the deck is already "yours." All four are
+find-and-replace or single-value edits.</p>
+
+<h3>1.1 — Your company name and product name</h3>
+<p>The example uses <strong>NORTHWIND DEFENSE</strong> (company) and <strong>AEGIS-1</strong>
+(product). Use your editor's <strong>Find &amp; Replace</strong> (Ctrl/Cmd + H) on
+<code>index.html</code>:</p>
+<div class="step"><span class="num">1</span><div>Replace <code>NORTHWIND DEFENSE</code> → <code>YOUR COMPANY</code> (Replace All)</div></div>
+<div class="step"><span class="num">2</span><div>Replace <code>AEGIS-1</code> → <code>Your Product</code> (Replace All)</div></div>
+<div class="step"><span class="num">3</span><div>Replace <code>northwind.example</code> → <code>yourcompany.com</code> (Replace All)</div></div>
+<div class="callout"><span class="lab">Tip</span><p style="margin:4px 0 0">
+That single Find &amp; Replace updates the browser tab title, the cover, the closing
+slide, and every other mention at once.</p></div>
+
+<h3>1.2 — Your brand colors</h3>
+<p>Open <code>styles.css</code>. The very first block is <code>:root { ... }</code> —
+the <strong>BRAND CONFIG</strong>. Every color in the deck comes from these seven values.
+Change the hex codes to your brand's:</p>
+<pre><code>:root {
+  <span class="cm">/* --- COLORS --- */</span>
+  --brand-primary:  <span class="hl">#0b1e2d</span>;   <span class="cm">/* main background */</span>
+  --brand-surface:  <span class="hl">#12293b</span>;   <span class="cm">/* card / panel background */</span>
+  --brand-accent:   <span class="hl">#35e0c8</span>;   <span class="cm">/* highlight (buttons, bars, numbers) */</span>
+  --brand-accent-2: <span class="hl">#4f9cff</span>;   <span class="cm">/* secondary highlight */</span>
+  --brand-text:     <span class="hl">#eaf2f7</span>;   <span class="cm">/* main text color */</span>
+  --brand-muted:    <span class="hl">#8fa8ba</span>;   <span class="cm">/* dimmed caption text */</span>
+  --brand-line:     <span class="hl">#244056</span>;   <span class="cm">/* borders and dividers */</span>
+}</code></pre>
+<p>A hex color is <code>#</code> followed by six characters. Your marketing team has
+your brand hex codes; paste them in. Keep <code>--brand-text</code> light if
+<code>--brand-primary</code> is dark (and vice-versa) so text stays readable.</p>
+<div class="callout warn"><span class="lab">Watch out</span><p style="margin:4px 0 0">
+Keep the <code>#</code>, the semicolon <code>;</code>, and the two dashes <code>--</code>.
+Only change the six-character color code.</p></div>
+
+<h3>1.3 — Your fonts</h3>
+<p>In the same <code>:root</code> block, a little further down:</p>
+<pre><code>  --font-heading: <span class="hl">"Segoe UI", "Helvetica Neue", Arial, sans-serif</span>;
+  --font-body:    <span class="hl">"Segoe UI", "Helvetica Neue", Arial, sans-serif</span>;</code></pre>
+<p>To use a font already on the presenting computer, just type its name first, e.g.
+<code>--font-heading: "Arial Black", sans-serif;</code>. To ship a <strong>custom brand
+font</strong> so it works on any computer (and offline), drop the font file into
+<code>assets/</code> and un-comment the <code>@font-face</code> example that sits right
+below the config block — then set the name:</p>
+<pre><code>@font-face {
+  font-family: "MyBrandFont";
+  src: url("assets/MyBrandFont.woff2") format("woff2");
+}
+<span class="cm">/* then: */</span>  --font-heading: "MyBrandFont", sans-serif;</code></pre>
+
+<h3>1.4 — Your logo</h3>
+<p>Replace the file <code>assets/logo.svg</code> with your own logo, keeping the same
+name (<code>logo.svg</code>). It appears on the cover and closing slides automatically.</p>
+<ul>
+  <li>If your logo is a <code>.png</code> or <code>.jpg</code> instead, put it in
+  <code>assets/</code> and change <code>src="assets/logo.svg"</code> to your filename
+  in <code>index.html</code> (it appears twice — cover and close).</li>
+  <li>An <strong>SVG</strong> logo stays crisp at any size — ask your designer for
+  the SVG if you have it.</li>
+</ul>
+
+<!-- ===================== PART 2: SLIDE BY SLIDE ===================== -->
+<h2 class="part"><span class="n">2.</span> Slide by slide</h2>
+<p>Each slide is one <code>&lt;section class="slide ..."&gt;</code> block in
+<code>index.html</code>, marked with a big comment banner you can search for, e.g.
+<code>SLIDE 3 — SOLUTION OVERVIEW</code>. Below, each slide lists <strong>what's on it</strong>,
+<strong>what to search for</strong>, and <strong>what to change</strong>.</p>
+
+<h3>Slide 1 — Cover</h3>
+<p><strong>Search for:</strong> <code>SLIDE 1 — COVER</code></p>
+<table>
+  <tr><th>To change…</th><th>Edit this line</th></tr>
+  <tr><td>Company name (small label on top)</td><td><code>&lt;p class="cover-kicker"&gt;NORTHWIND DEFENSE&lt;/p&gt;</code></td></tr>
+  <tr><td>Big product / deck title</td><td><code>&lt;h1 class="cover-title"&gt;AEGIS-1&lt;span...&gt;.&lt;/span&gt;&lt;/h1&gt;</code></td></tr>
+  <tr><td>Tagline sentence</td><td><code>&lt;p class="cover-tagline"&gt;...&lt;/p&gt;</code></td></tr>
+  <tr><td>Presenter name</td><td><code>&lt;p class="cover-presenter"&gt;... [Presenter Name]&lt;/p&gt;</code></td></tr>
+  <tr><td>Background video</td><td>See Part 3 — drop a file at <code>assets/cover-bg.mp4</code></td></tr>
+</table>
+
+<h3>Slide 2 — The Problem</h3>
+<p><strong>Search for:</strong> <code>SLIDE 2 — THE PROBLEM</code></p>
+<ul>
+  <li><strong>Section label:</strong> the <code>&lt;p class="eyebrow"&gt;The Problem&lt;/p&gt;</code> line.</li>
+  <li><strong>Headline:</strong> the <code>&lt;h2 class="statement-headline"&gt;</code> text.
+  Words wrapped in <code>&lt;span class="accent"&gt;...&lt;/span&gt;</code> show in your accent color.</li>
+  <li><strong>The three stats:</strong> each is one <code>&lt;li class="stat ..."&gt;</code>.
+  Change the big number in <code>&lt;span class="stat-value"&gt;</code> and the caption in
+  <code>&lt;span class="stat-label"&gt;</code>. Delete an <code>&lt;li&gt;...&lt;/li&gt;</code> to
+  drop a stat, or copy one to add a fourth.</li>
+</ul>
+
+<h3>Slide 3 — Solution Overview (three cards)</h3>
+<p><strong>Search for:</strong> <code>SLIDE 3 — SOLUTION OVERVIEW</code></p>
+<p>Three <code>&lt;article class="card ..."&gt;</code> blocks. For each card, edit the icon
+(<code>&lt;div class="card-icon"&gt;</code> — any emoji or symbol), the
+<code>&lt;h3 class="card-title"&gt;</code>, and the <code>&lt;p class="card-text"&gt;</code>.</p>
+<div class="callout"><span class="lab">Add or remove a card</span><p style="margin:4px 0 0">
+Copy a whole <code>&lt;article class="card fragment"&gt;...&lt;/article&gt;</code> block to add
+a fourth card, or delete one to have two. The row re-centers automatically.</p></div>
+
+<h3>Slide 4 — How It Works (flow diagram)</h3>
+<p><strong>Search for:</strong> <code>SLIDE 4 — HOW IT WORKS</code></p>
+<p>Three <code>&lt;div class="flow-node"&gt;</code> boxes joined by arrows. In each box edit the
+step number (<code>&lt;span class="flow-num"&gt;01&lt;/span&gt;</code>), the <code>&lt;h3&gt;</code>
+title, and the <code>&lt;p&gt;</code> description. To add a step, copy a
+<code>flow-arrow</code> + <code>flow-node</code> pair.</p>
+
+<h3>Slide 5 — The Proof (KPIs + bar chart)</h3>
+<p><strong>Search for:</strong> <code>SLIDE 5 — PROOF</code></p>
+<ul>
+  <li><strong>KPI numbers:</strong> three <code>&lt;div class="kpi"&gt;</code> blocks — edit
+  <code>&lt;span class="kpi-value"&gt;</code> and <code>&lt;span class="kpi-label"&gt;</code>.</li>
+  <li><strong>Bar chart:</strong> three <code>&lt;div class="bar ..."&gt;</code> blocks. The bar's
+  <em>height</em> is set by <code>style="--h: 58%"</code> — change the percentage. Edit the number
+  shown on top in <code>&lt;span class="bar-cap"&gt;</code> and the name in
+  <code>&lt;span class="bar-label"&gt;</code>. The tallest bar carries the extra class
+  <code>bar--accent</code> to color it — move that class to whichever bar is "yours."</li>
+</ul>
+
+<h3>Slide 6 — Comparison (table)</h3>
+<p><strong>Search for:</strong> <code>SLIDE 6 — COMPARISON</code></p>
+<p>A standard table. The header row is the <code>&lt;thead&gt;</code>; each comparison row is a
+<code>&lt;tr&gt;</code> with three <code>&lt;td&gt;</code> cells (capability, "legacy", "yours").
+Edit the text in each <code>&lt;td&gt;</code>. The <code>col-accent</code> class colors your
+column. Copy a <code>&lt;tr&gt;...&lt;/tr&gt;</code> to add a row.</p>
+
+<h3>Slide 7 — Use Cases (tile grid)</h3>
+<p><strong>Search for:</strong> <code>SLIDE 7 — USE CASES</code></p>
+<p>Four <code>&lt;div class="tile"&gt;</code> boxes; each has an <code>&lt;h3&gt;</code> and a
+<code>&lt;p&gt;</code>. Add or delete tiles freely — they reflow into the grid.</p>
+
+<h3>Slide 8 — Close (call to action + contact)</h3>
+<p><strong>Search for:</strong> <code>SLIDE 8 — CLOSE</code></p>
+<p>Edit the <code>&lt;h2 class="close-title"&gt;</code> (the big line), the
+<code>&lt;p class="close-sub"&gt;</code>, and the contact details in
+<code>&lt;p class="close-contact"&gt;</code> (name, email, phone).</p>
+
+<h3>Adding, deleting, and reordering slides</h3>
+<ul>
+  <li><strong>Add:</strong> copy an entire <code>&lt;section class="slide ..."&gt; ... &lt;/section&gt;</code>
+  block, paste it where you want it, and edit the text. Increase the total in the
+  counter is automatic.</li>
+  <li><strong>Delete:</strong> remove a whole <code>&lt;section&gt;...&lt;/section&gt;</code> block.</li>
+  <li><strong>Reorder:</strong> cut and paste a whole <code>&lt;section&gt;</code> block to a new spot.</li>
+</ul>
+<div class="callout warn"><span class="lab">Always move whole blocks</span><p style="margin:4px 0 0">
+A slide starts at <code>&lt;section ...&gt;</code> and ends at the matching
+<code>&lt;/section&gt;</code>. Select from one to the other so you never split a slide.</p></div>
+
+<!-- ===================== PART 3: VIDEO ===================== -->
+<h2 class="part"><span class="n">3.</span> Background video &amp; animation</h2>
+<p>The cover slide is already wired for a background video. To use it:</p>
+<div class="step"><span class="num">1</span><div>Put your clip in the assets folder, named <code>assets/cover-bg.mp4</code>
+(MP4, H.264 — export "web/1080p" from any editor). Keep it short and looping.</div></div>
+<div class="step"><span class="num">2</span><div>Optional: add a still frame <code>assets/cover-poster.jpg</code> that shows
+before the video loads (and in the PDF export).</div></div>
+<div class="step"><span class="num">3</span><div>That's it — it autoplays, muted, looping, behind the text.</div></div>
+
+<p>To put a background video on <strong>another</strong> slide, copy these two lines from
+Slide 1 to just inside that slide's <code>&lt;section&gt;</code>, and point to your file:</p>
+<pre><code>&lt;video class="slide-bg-video" autoplay muted loop playsinline poster="assets/<span class="hl">my-poster.jpg</span>"&gt;
+  &lt;source src="assets/<span class="hl">my-clip.mp4</span>" type="video/mp4" /&gt;
+&lt;/video&gt;
+&lt;div class="slide-bg-scrim"&gt;&lt;/div&gt;   <span class="cm">&lt;!-- darkens the video so text stays readable --&gt;</span></code></pre>
+<div class="callout warn"><span class="lab">Offline &amp; autoplay notes</span><p style="margin:4px 0 0">
+Videos <strong>must be muted</strong> to autoplay. Bundle the actual video file in
+<code>assets/</code> (never link a YouTube/CDN URL) so the deck works with no internet.
+If a video won't play from a double-clicked file, serve the folder locally — see the
+deck's <code>README</code>.</p></div>
+<p>The moving grid "sensor sweep" behind every slide is pure animation (no file) and
+already on. It's defined by the <code>.slide::before</code> rule in <code>styles.css</code>
+if you ever want to tune or remove it.</p>
+
+<!-- ===================== PART 4: EXPORT ===================== -->
+<h2 class="part"><span class="n">4.</span> Exporting a static copy (PDF &amp; PowerPoint)</h2>
+
+<h3>PDF — easy and faithful (recommended)</h3>
+<div class="step"><span class="num">1</span><div>Open the deck in <strong>Google Chrome</strong> or Edge.</div></div>
+<div class="step"><span class="num">2</span><div>Press <strong>Ctrl/Cmd + P</strong>.</div></div>
+<div class="step"><span class="num">3</span><div>Destination → <strong>Save as PDF</strong>. Set <strong>Margins: None</strong> and tick
+<strong>Background graphics</strong>.</div></div>
+<div class="step"><span class="num">4</span><div>Save. You get one clean slide per page — perfect as a leave-behind or email attachment.</div></div>
+<p>The deck already has a print stylesheet that lays out exactly one slide per page and
+reveals all animated elements. Video backgrounds can't appear in a PDF, so the
+poster image / dark background shows instead — that's why a <code>cover-poster.jpg</code> is worth adding.</p>
+
+<h3>PowerPoint (.pptx) — the honest caveat</h3>
+<div class="callout warn"><span class="lab">Read this before promising a .pptx</span>
+<p style="margin:4px 0 0">A rich, animated web deck <strong>cannot</strong> be converted into an
+equally-rich, editable PowerPoint. Videos, animations, and custom layouts do not
+round-trip into editable PowerPoint shapes. There is no lossless "Save as PPTX."</p></div>
+<p>Your two realistic options:</p>
+<ul>
+  <li><strong>Best for handouts:</strong> use the <strong>PDF</strong> above. It opens everywhere,
+  looks identical, and needs no PowerPoint.</li>
+  <li><strong>If you truly need a .pptx</strong> (e.g. to paste slides into a corporate template):
+  export the PDF, then in PowerPoint use <em>Insert → move each PDF page in as a picture</em>,
+  or open the PDF in a converter. You'll get one <em>image</em> per slide — not editable text,
+  but it drops into any template. This is a fallback, not a primary workflow.</li>
+</ul>
+<p>The recommendation for your BD leads: <strong>present from the live web deck</strong>
+(that's where the videos and animation shine), and <strong>hand out the PDF</strong>.</p>
+
+<!-- ===================== PART 5: DEPLOY ===================== -->
+<h2 class="part"><span class="n">5.</span> Putting it in front of customers</h2>
+<h3>On a company website (for easy access)</h3>
+<p>Upload the whole <code>solution-briefing/</code> folder to any static web host — your
+company web server, an S3 bucket, SharePoint, Netlify, or GitHub Pages. There's no
+server-side code, so "hosting" is just copying files. Share the link; it opens in any browser.</p>
+<h3>On a laptop with no internet (trade-show floor)</h3>
+<p>Copy the same <code>solution-briefing/</code> folder onto the laptop (or a USB stick).
+Double-click <code>index.html</code>. Because every font, image, and video is bundled in the
+folder, it runs fully offline — identical to the hosted version.</p>
+<div class="callout"><span class="lab">One deck, both modes</span><p style="margin:4px 0 0">
+The hosted copy and the offline copy are the <em>same files</em>. Keep one master folder,
+and whenever you update it, re-upload it to the website and re-copy it to the presenting laptops.</p></div>
+
+</div>
+
+<!-- ===================== ONE-PAGER CHEAT SHEET ===================== -->
+<div class="page onepager">
+<h2 class="part" style="page-break-before: always;"><span class="n">★</span> One-Page Cheat Sheet — common edits</h2>
+<p style="margin-top:2px; color:var(--muted)">Everything a non-coder needs for day-to-day tweaks. <code>index.html</code> = words &amp; pictures. <code>styles.css</code> = colors, fonts, sizes.</p>
+
+<div class="cheat">
+
+  <div class="box">
+    <h4>Change wording on a slide</h4>
+    <p style="margin:0 0 6px">In <code>index.html</code>, edit the text <em>between</em> the tags. Keep the tags.</p>
+    <pre>&lt;h3&gt;<span class="hl">Your new title</span>&lt;/h3&gt;</pre>
+  </div>
+
+  <div class="box">
+    <h4>Change a color (whole deck)</h4>
+    <p style="margin:0 0 6px">In <code>styles.css</code>, top <code>:root</code> block. Change the 6-char hex.</p>
+    <pre>--brand-accent: <span class="hl">#e2231a</span>;
+--brand-primary: <span class="hl">#101820</span>;</pre>
+  </div>
+
+  <div class="box">
+    <h4>Font color of one piece of text</h4>
+    <p style="margin:0 0 6px">Wrap it and add an inline color (in <code>index.html</code>):</p>
+    <pre>&lt;span style="color:<span class="hl">#e2231a</span>"&gt;text&lt;/span&gt;</pre>
+    <p style="margin:6px 0 0">Or use the built-in accent: <code>&lt;span class="accent"&gt;text&lt;/span&gt;</code></p>
+  </div>
+
+  <div class="box">
+    <h4>Background color of a slide</h4>
+    <p style="margin:0 0 6px">Whole deck: change <code>--brand-primary</code>. One slide only — add to that <code>&lt;section&gt;</code>:</p>
+    <pre>&lt;section class="slide" style="background:<span class="hl">#101820</span>"&gt;</pre>
+  </div>
+
+  <div class="box">
+    <h4>Bigger / smaller font</h4>
+    <p style="margin:0 0 6px">One item — add an inline size (in <code>index.html</code>):</p>
+    <pre>&lt;h2 style="font-size:<span class="hl">3rem</span>"&gt;...&lt;/h2&gt;</pre>
+    <p style="margin:6px 0 0">A whole class of text: change its size variable in <code>styles.css</code>, e.g. <code>--size-section-title</code>.</p>
+  </div>
+
+  <div class="box">
+    <h4>Bold / italic / underline</h4>
+    <pre>&lt;strong&gt;bold&lt;/strong&gt;
+&lt;em&gt;italic&lt;/em&gt;
+&lt;u&gt;underlined&lt;/u&gt;</pre>
+    <p style="margin:6px 0 0">Wrap the words you want to style. They can nest: <code>&lt;strong&gt;&lt;em&gt;both&lt;/em&gt;&lt;/strong&gt;</code>.</p>
+  </div>
+
+  <div class="box">
+    <h4>Change a picture / logo</h4>
+    <p style="margin:0 0 6px">Drop the new file in <code>assets/</code>, then point to it in <code>index.html</code>:</p>
+    <pre>&lt;img src="assets/<span class="hl">my-photo.jpg</span>" /&gt;</pre>
+    <p style="margin:6px 0 0">Or just overwrite <code>assets/logo.svg</code> with a file of the same name.</p>
+  </div>
+
+  <div class="box">
+    <h4>Change the font</h4>
+    <p style="margin:0 0 6px">In <code>styles.css</code> <code>:root</code> block:</p>
+    <pre>--font-heading: <span class="hl">"Arial Black"</span>, sans-serif;
+--font-body: <span class="hl">"Georgia"</span>, serif;</pre>
+  </div>
+
+  <div class="box">
+    <h4>Add / delete / move a slide</h4>
+    <p style="margin:0 0 6px">Copy, delete, or move a whole block from <code>&lt;section&gt;</code> to <code>&lt;/section&gt;</code>.</p>
+    <pre>&lt;section class="slide"&gt;
+   ... slide content ...
+&lt;/section&gt;</pre>
+  </div>
+
+  <div class="box">
+    <h4>Change a bar-chart bar</h4>
+    <p style="margin:0 0 6px">Height = the <code>--h</code> percentage (Slide 5, <code>index.html</code>):</p>
+    <pre>&lt;div class="bar" style="--h: <span class="hl">72%</span>"&gt;</pre>
+  </div>
+
+  <div class="box">
+    <h4>Highlight a word in accent color</h4>
+    <pre>&lt;span class="accent"&gt;<span class="hl">wins</span>&lt;/span&gt;</pre>
+    <p style="margin:6px 0 0">Uses your <code>--brand-accent</code> color automatically.</p>
+  </div>
+
+  <div class="box">
+    <h4>Export to PDF</h4>
+    <p style="margin:0">Open in Chrome → <strong>Ctrl/Cmd+P</strong> → <strong>Save as PDF</strong> → Margins <strong>None</strong>, tick <strong>Background graphics</strong>.</p>
+  </div>
+
+</div>
+
+<h3 style="margin-top:16px">Presenting — keyboard shortcuts</h3>
+<table>
+  <tr><th>Key</th><th>Action</th><th>Key</th><th>Action</th></tr>
+  <tr><td><code>→</code> / <code>Space</code></td><td>Next slide</td><td><code>F</code></td><td>Fullscreen</td></tr>
+  <tr><td><code>←</code></td><td>Previous slide</td><td><code>Home</code> / <code>End</code></td><td>First / last slide</td></tr>
+</table>
+
+<div class="callout"><span class="lab">Safety net</span><p style="margin:4px 0 0">
+Before editing, copy the whole <code>solution-briefing</code> folder somewhere safe. If an
+edit breaks the look, you can always start again from the copy. Small edits, save,
+refresh — that rhythm keeps you out of trouble.</p></div>
+
+</div>
+
+</body>
+</html>
